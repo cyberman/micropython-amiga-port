@@ -1,2 +1,16 @@
-
+# macOS
 .DS_Store
+
+# Build artifacts - mpy-cross
+mpy-cross/build/
+
+# Build artifacts - Amiga port (sauf le binaire final)
+ports/amiga/build/**
+!ports/amiga/build/micropython
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Claude Code
+CLAUDE.md
