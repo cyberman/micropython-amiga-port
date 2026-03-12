@@ -18,6 +18,12 @@
 #include <proto/dos.h>
 #include <proto/exec.h>
 
+// Padding to align mp_sys_argv_obj in MP_STATE_VM on a 4-byte boundary.
+// In OBJ_REPR_A, object pointers must have bits 1:0 == 0. Without this,
+// mp_sys_argv_obj lands at an odd offset (e.g. +2 mod 4) and MicroPython
+// misidentifies it as a qstr instead of an object pointer.
+MP_REGISTER_ROOT_POINTER(int16_t _argv_align_pad);
+
 // Tell AmigaOS/libnix to allocate a 128 KB stack for this process.
 long __stack = 131072;
 
@@ -121,8 +127,7 @@ static void vm_init(int argc, char **argv) {
     }
     gc_init(heap, heap + MICROPY_HEAP_SIZE);
     mp_init();
-    // Initialise sys.argv comme liste propre
-    mp_obj_list_init(MP_OBJ_TO_PTR(mp_sys_argv), 0);
+    // Populate sys.argv with argv[1:] (mp_init already created the empty list)
     for (int i = 1; i < argc; i++) {
         mp_obj_list_append(mp_sys_argv,
             MP_OBJ_NEW_QSTR(qstr_from_str(argv[i])));
