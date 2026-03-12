@@ -12,3 +12,4 @@
 
 freeze("$(MPY_LIB_DIR)/python-stdlib/base64", "base64.py")
 freeze("$(PORT_DIR)/modules", "datetime.py")
+freeze("$(PORT_DIR)/modules", "_ospath.py")
