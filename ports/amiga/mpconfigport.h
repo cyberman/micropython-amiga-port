@@ -33,7 +33,7 @@
 #define MICROPY_ALLOC_QSTR_CHUNK_INIT   (2048)
 #define MICROPY_QSTR_BYTES_IN_LEN       (2)
 #define MICROPY_QSTR_BYTES_IN_HASH      (2)
-#define MICROPY_HEAP_SIZE               (512 * 1024) // 512 KB
+#define MICROPY_HEAP_SIZE               (256 * 1024) // 256 KB
 
 // Disable features requiring POSIX or threading
 #define MICROPY_PY_THREAD               (0)

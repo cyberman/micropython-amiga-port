@@ -34,6 +34,7 @@ long __stack = 131072;
 
 static char *stack_top;
 static char *heap = NULL;
+static unsigned long heap_size = MICROPY_HEAP_SIZE;
 BPTR original_dir = 0;
 
 // quit() and exit() builtins — raise SystemExit
@@ -51,6 +52,8 @@ MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_builtin_exit_obj, 0, 1, mp_builtin_quit);
 static void do_repl(void) {
     mp_hal_stdout_tx_str("MicroPython v" MICROPY_VERSION_STRING " on " AMIGA_BUILD_TIMESTAMP
         " build " AMIGA_BUILD_NUM "; " MICROPY_BANNER_MACHINE "\n");
+    printf("Heap: %luKB (available: %luKB)\n",
+           heap_size / 1024, (unsigned long)AvailMem(MEMF_ANY) / 1024);
     mp_hal_stdout_tx_str("Use quit() or Ctrl-C to exit\n");
 
     for (;;) {
@@ -147,9 +150,18 @@ static int do_file(const char *filename) {
 // Initialise the VM and populate sys.argv.
 static void vm_init(int argc, char **argv) {
     if (heap == NULL) {
-        heap = (char *)AllocMem(MICROPY_HEAP_SIZE, MEMF_ANY | MEMF_CLEAR);
+        unsigned long avail = (unsigned long)AvailMem(MEMF_ANY);
+        if (heap_size > avail * 80 / 100) {
+            printf("Warning: requesting %luKB but only %luKB available\n",
+                   heap_size / 1024, avail / 1024);
+        }
+        heap = (char *)AllocMem(heap_size, MEMF_ANY | MEMF_CLEAR);
+        if (heap == NULL) {
+            printf("Error: cannot allocate %luKB heap\n", heap_size / 1024);
+            exit(1);
+        }
     }
-    gc_init(heap, heap + MICROPY_HEAP_SIZE);
+    gc_init(heap, heap + heap_size);
     mp_stack_ctrl_init();
     mp_stack_set_top(stack_top);
     mp_init();
@@ -176,6 +188,16 @@ int main(int argc, char **argv) {
     original_dir = CurrentDir(0);
     CurrentDir(original_dir);
 
+    // Parse -m <size_kb> option (must be first)
+    if (argc >= 3 && strcmp(argv[1], "-m") == 0) {
+        heap_size = (unsigned long)atol(argv[2]) * 1024;
+        if (heap_size == 0) {
+            heap_size = MICROPY_HEAP_SIZE;
+        }
+        argc -= 2;
+        argv += 2;
+    }
+
     int ret = 0;
     if (argc >= 3 && strcmp(argv[1], "-c") == 0) {
         vm_init(argc - 1, argv + 1); // sys.argv = ['-c', ...]  skipping the code string
@@ -193,7 +215,7 @@ int main(int argc, char **argv) {
 
     // Free dynamically allocated heap.
     if (heap != NULL) {
-        FreeMem(heap, MICROPY_HEAP_SIZE);
+        FreeMem(heap, heap_size);
         heap = NULL;
     }
 
@@ -219,7 +241,7 @@ void nlr_jump_fail(void *val) {
     (void)val;
     printf("FATAL: uncaught NLR\n");
     if (heap != NULL) {
-        FreeMem(heap, MICROPY_HEAP_SIZE);
+        FreeMem(heap, heap_size);
         heap = NULL;
     }
     exit(1);
@@ -230,7 +252,7 @@ void __assert_func(const char *file, int line, const char *func, const char *exp
     (void)func;
     printf("Assertion '%s' failed, at file %s:%d\n", expr, file, line);
     if (heap != NULL) {
-        FreeMem(heap, MICROPY_HEAP_SIZE);
+        FreeMem(heap, heap_size);
         heap = NULL;
     }
     exit(1);
