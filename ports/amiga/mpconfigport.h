@@ -17,8 +17,11 @@
 #define MICROPY_PY_BUILTINS_HELP        (1)
 #define MICROPY_PY_BUILTINS_HELP_MODULES (1)
 
-// No readline for now; use line-buffered (cooked) input from AmigaOS console
-#define MICROPY_USE_READLINE            (0)
+// Readline with history and cursor key support
+#define MICROPY_USE_READLINE            (1)
+#define MICROPY_USE_READLINE_HISTORY    (1)
+#define MICROPY_READLINE_HISTORY_SIZE   (50)
+#define MICROPY_HAL_HAS_STDIO_MODE_SWITCH (1)
 
 // Use setjmp-based NLR (no native m68k NLR implementation)
 #define MICROPY_NLR_SETJMP              (1)
@@ -101,6 +104,7 @@ typedef long mp_off_t;
 
 #define MICROPY_HW_BOARD_NAME           "Amiga"
 #define MICROPY_HW_MCU_NAME             "M68020"
+
 
 
 #define MP_STATE_PORT MP_STATE_VM

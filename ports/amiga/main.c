@@ -16,6 +16,7 @@
 #include "py/stackctrl.h"
 #include "shared/runtime/gchelper.h"
 #include "shared/runtime/pyexec.h"
+#include "shared/readline/readline.h"
 #include "extmod/vfs.h"
 #include "extmod/vfs_posix.h"
 #include "genhdr/mpversion.h"
@@ -48,73 +49,101 @@ static mp_obj_t mp_builtin_quit(size_t n_args, const mp_obj_t *args) {
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_builtin_quit_obj, 0, 1, mp_builtin_quit);
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_builtin_exit_obj, 0, 1, mp_builtin_quit);
 
-// Line-buffered REPL using mp_hal_readline (fgets) + mp_repl_continue_with_input.
+// Custom REPL using readline with cursor keys and history.
 static void do_repl(void) {
     mp_hal_stdout_tx_str("MicroPython v" MICROPY_VERSION_STRING " on " AMIGA_BUILD_TIMESTAMP
-        " build " AMIGA_BUILD_NUM "; " MICROPY_BANNER_MACHINE "\n");
-    printf("Heap: %luKB (available: %luKB)\n",
+        " build " AMIGA_BUILD_NUM "; " MICROPY_HW_BOARD_NAME " with " MICROPY_HW_MCU_NAME "\r\n");
+    printf("Heap: %luKB (available: %luKB)\r\n",
            heap_size / 1024, (unsigned long)AvailMem(MEMF_ANY) / 1024);
-    mp_hal_stdout_tx_str("Use quit() or Ctrl-C to exit\n");
+    mp_hal_stdout_tx_str("Use Ctrl-D to exit, Ctrl-E for paste mode\r\n");
+    mp_hal_stdout_tx_str("Type \"help()\" for more information.\r\n");
+
+    mp_hal_stdio_mode_raw();
+
+    vstr_t line;
+    vstr_init(&line, 32);
 
     for (;;) {
-        vstr_t line;
-        vstr_init(&line, 32);
-        int ret = mp_hal_readline(&line, ">>> ");
-        if (ret == 4) {  // Ctrl-D / EOF
-            vstr_clear(&line);
+        MP_STATE_THREAD(gc_lock_depth) = 0;
+        vstr_reset(&line);
+        int ret = readline(&line, ">>> ");
+        mp_parse_input_kind_t parse_input_kind = MP_PARSE_SINGLE_INPUT;
+
+        if (ret == CHAR_CTRL_C) {
+            mp_hal_stdout_tx_str("\r\n");
+            continue;
+        } else if (ret == CHAR_CTRL_D) {
+            mp_hal_stdout_tx_str("\r\n");
             break;
-        }
-
-        // Check for Ctrl-C
-        if (line.len == 1 && vstr_str(&line)[0] == '\x03') {
-            vstr_clear(&line);
-            break;
-        }
-
-        // Multi-line input (if/for/def/class blocks)
-        while (mp_repl_continue_with_input(vstr_null_terminated_str(&line))) {
-            vstr_t extra;
-            vstr_init(&extra, 32);
-            ret = mp_hal_readline(&extra, "... ");
-            if (ret == 4) {
-                vstr_clear(&extra);
-                break;
+        } else if (ret == CHAR_CTRL_E) {
+            // Paste mode
+            mp_hal_stdout_tx_str("\r\npaste mode; Ctrl-C to cancel, Ctrl-D to finish\r\n=== ");
+            vstr_reset(&line);
+            for (;;) {
+                char c = mp_hal_stdin_rx_chr();
+                if (c == CHAR_CTRL_C) {
+                    mp_hal_stdout_tx_str("\r\n");
+                    goto input_restart;
+                } else if (c == CHAR_CTRL_D) {
+                    mp_hal_stdout_tx_str("\r\n");
+                    break;
+                } else {
+                    vstr_add_byte(&line, c);
+                    if (c == '\r') {
+                        mp_hal_stdout_tx_str("\r\n=== ");
+                    } else {
+                        mp_hal_stdout_tx_strn(&c, 1);
+                    }
+                }
             }
-            vstr_add_char(&line, '\n');
-            vstr_add_strn(&line, vstr_str(&extra), extra.len);
-            vstr_clear(&extra);
+            parse_input_kind = MP_PARSE_FILE_INPUT;
+        } else if (vstr_len(&line) == 0) {
+            continue;
+        } else {
+            // Multi-line input (if/for/def/class blocks)
+            while (mp_repl_continue_with_input(vstr_null_terminated_str(&line))) {
+                vstr_add_byte(&line, '\n');
+                ret = readline(&line, "... ");
+                if (ret == CHAR_CTRL_C) {
+                    mp_hal_stdout_tx_str("\r\n");
+                    goto input_restart;
+                } else if (ret == CHAR_CTRL_D) {
+                    break;
+                }
+            }
         }
 
-        if (line.len > 0) {
-            mp_lexer_t *lex = mp_lexer_new_from_str_len(
-                MP_QSTR__lt_stdin_gt_,
-                vstr_str(&line), line.len, 0);
-            if (lex == NULL) {
-                vstr_clear(&line);
-                continue;
-            }
-
+        mp_hal_stdio_mode_orig();
+        {
             nlr_buf_t nlr;
             if (nlr_push(&nlr) == 0) {
+                mp_lexer_t *lex = mp_lexer_new_from_str_len(
+                    MP_QSTR__lt_stdin_gt_,
+                    vstr_str(&line), vstr_len(&line), 0);
                 qstr source_name = lex->source_name;
-                mp_parse_tree_t parse_tree = mp_parse(lex, MP_PARSE_SINGLE_INPUT);
-                mp_obj_t module_fun = mp_compile(&parse_tree, source_name, true);
+                mp_parse_tree_t parse_tree = mp_parse(lex, parse_input_kind);
+                mp_obj_t module_fun = mp_compile(&parse_tree, source_name,
+                    parse_input_kind == MP_PARSE_SINGLE_INPUT);
                 mp_call_function_0(module_fun);
                 nlr_pop();
             } else {
                 if (mp_obj_is_subclass_fast(
                         MP_OBJ_FROM_PTR(((mp_obj_base_t *)nlr.ret_val)->type),
                         MP_OBJ_FROM_PTR(&mp_type_SystemExit))) {
-                    vstr_clear(&line);
                     break;
                 }
                 mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);
             }
         }
-        vstr_clear(&line);
+        mp_hal_stdio_mode_raw();
+        continue;
+    input_restart:
+        continue;
     }
 
-    mp_hal_stdout_tx_str("Bye!\n");
+    vstr_clear(&line);
+    mp_hal_stdio_mode_orig();
+    mp_hal_stdout_tx_str("Bye!\r\n");
 }
 
 // Execute a string of Python code (for -c option). Returns 0 on success.
@@ -239,6 +268,7 @@ void gc_collect(void) {
 
 void nlr_jump_fail(void *val) {
     (void)val;
+    mp_hal_stdio_mode_orig();
     printf("FATAL: uncaught NLR\n");
     if (heap != NULL) {
         FreeMem(heap, heap_size);
@@ -250,6 +280,7 @@ void nlr_jump_fail(void *val) {
 #ifndef NDEBUG
 void __assert_func(const char *file, int line, const char *func, const char *expr) {
     (void)func;
+    mp_hal_stdio_mode_orig();
     printf("Assertion '%s' failed, at file %s:%d\n", expr, file, line);
     if (heap != NULL) {
         FreeMem(heap, heap_size);
