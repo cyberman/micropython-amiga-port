@@ -103,7 +103,7 @@ internal ordinal instead of year/month/day. The local copy in `modules/datetime.
 fixes this. The time module import uses `__import__("time")` to work around the
 name collision with `class time` defined in the same file.
 
-**Dynamic heap via AllocMem.** The GC heap (default 256 KB) is allocated dynamically
+**Dynamic heap via AllocMem.** The GC heap (default 128 KB) is allocated dynamically
 via `AllocMem(heap_size, MEMF_ANY | MEMF_CLEAR)`. Size is configurable via the
 `-m` command line option. `FreeMem()` is called on normal exit and in crash handlers
 (`nlr_jump_fail`, `__assert_func`). Available RAM is checked before allocation.
@@ -152,7 +152,7 @@ micropython -m 1024 script.py        # execute with 1024 KB heap
 micropython -m 512                   # launch REPL with 512 KB heap
 ```
 
-The `-m <size_kb>` option must come first. Default heap is 256 KB.
+The `-m <size_kb>` option must come first. Default heap is 128 KB.
 The `-c <code>` option executes Python code and exits.
 
 ## Module uos / os (AmigaOS)
@@ -334,7 +334,7 @@ Console is restored to cooked mode in crash handlers (`nlr_jump_fail`,
 
 ## Memory
 
-- GC heap: 256 KB default, configurable via `-m <kb>` (e.g. `-m 1024` for 1 MB)
+- GC heap: 128 KB default, configurable via `-m <kb>` (e.g. `-m 1024` for 1 MB)
   Dynamic allocation via `AllocMem(heap_size, MEMF_ANY | MEMF_CLEAR)`,
   freed by `FreeMem()` on exit and in crash handlers
 - Available RAM checked before allocation; warning if >80% requested
