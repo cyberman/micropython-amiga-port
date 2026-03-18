@@ -10,8 +10,22 @@
 #include "py/objstr.h"
 #include "py/mperrno.h"
 
+#include <stdio.h>
+
 #include <proto/dos.h>
+#include <proto/exec.h>
 #include <dos/dos.h>
+#include <exec/execbase.h>
+#include <graphics/gfxbase.h>
+
+extern struct ExecBase *SysBase;
+extern struct GfxBase *GfxBase;
+
+// Chipset detection bits from ChipRevBits0
+#define GFXB_AA_ALICE  2
+#define GFXB_AA_LISA   3
+#define GFXB_HR_AGNUS  0
+#define GFXB_HR_DENISE 1
 
 // os.listdir([path]) — list directory contents using Examine/ExNext.
 static mp_obj_t mod_os_listdir(size_t n_args, const mp_obj_t *args) {
@@ -249,6 +263,71 @@ static mp_obj_t mod_os_stat(mp_obj_t path_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mod_os_stat_obj, mod_os_stat);
 
+// uos._cpu() — detect CPU from SysBase->AttnFlags.
+static mp_obj_t mod_os_cpu(void) {
+    UWORD flags = SysBase->AttnFlags;
+    const char *cpu;
+    if (flags & AFF_68060)      cpu = "68060";
+    else if (flags & AFF_68040) cpu = "68040";
+    else if (flags & AFF_68030) cpu = "68030";
+    else if (flags & AFF_68020) cpu = "68020";
+    else                        cpu = "68000";
+    return mp_obj_new_str(cpu, strlen(cpu));
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_os_cpu_obj, mod_os_cpu);
+
+// uos._fpu() — detect FPU from SysBase->AttnFlags.
+static mp_obj_t mod_os_fpu(void) {
+    UWORD flags = SysBase->AttnFlags;
+    const char *fpu;
+    if (flags & AFF_FPU40)       fpu = "68040/68060 internal";
+    else if (flags & AFF_68882)  fpu = "68882";
+    else if (flags & AFF_68881)  fpu = "68881";
+    else                         fpu = "none";
+    return mp_obj_new_str(fpu, strlen(fpu));
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_os_fpu_obj, mod_os_fpu);
+
+// uos._chipset() — detect chipset from GfxBase->ChipRevBits0.
+static mp_obj_t mod_os_chipset(void) {
+    const char *cs;
+    if (GfxBase == NULL) {
+        cs = "unknown";
+    } else {
+        UBYTE bits = GfxBase->ChipRevBits0;
+        if ((bits & (1 << GFXB_AA_ALICE)) && (bits & (1 << GFXB_AA_LISA)))
+            cs = "AGA";
+        else if ((bits & (1 << GFXB_HR_AGNUS)) || (bits & (1 << GFXB_HR_DENISE)))
+            cs = "ECS";
+        else
+            cs = "OCS";
+    }
+    return mp_obj_new_str(cs, strlen(cs));
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_os_chipset_obj, mod_os_chipset);
+
+// uos._kickstart() — return "version.revision" string.
+static mp_obj_t mod_os_kickstart(void) {
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%d.%d",
+             (int)SysBase->LibNode.lib_Version,
+             (int)SysBase->SoftVer);
+    return mp_obj_new_str(buf, strlen(buf));
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_os_kickstart_obj, mod_os_kickstart);
+
+// uos._chipmem() — return available chip memory in bytes.
+static mp_obj_t mod_os_chipmem(void) {
+    return mp_obj_new_int((mp_int_t)AvailMem(MEMF_CHIP));
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_os_chipmem_obj, mod_os_chipmem);
+
+// uos._fastmem() — return available fast memory in bytes.
+static mp_obj_t mod_os_fastmem(void) {
+    return mp_obj_new_int((mp_int_t)AvailMem(MEMF_FAST));
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_os_fastmem_obj, mod_os_fastmem);
+
 static const mp_rom_map_elem_t os_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_uos) },
     { MP_ROM_QSTR(MP_QSTR_listdir), MP_ROM_PTR(&mod_os_listdir_obj) },
@@ -262,6 +341,12 @@ static const mp_rom_map_elem_t os_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_stat), MP_ROM_PTR(&mod_os_stat_obj) },
     { MP_ROM_QSTR(MP_QSTR_sep), MP_ROM_QSTR(MP_QSTR__slash_) },
     { MP_ROM_QSTR(MP_QSTR__stat_type), MP_ROM_PTR(&mod_os_stat_type_obj) },
+    { MP_ROM_QSTR(MP_QSTR__cpu), MP_ROM_PTR(&mod_os_cpu_obj) },
+    { MP_ROM_QSTR(MP_QSTR__fpu), MP_ROM_PTR(&mod_os_fpu_obj) },
+    { MP_ROM_QSTR(MP_QSTR__chipset), MP_ROM_PTR(&mod_os_chipset_obj) },
+    { MP_ROM_QSTR(MP_QSTR__kickstart), MP_ROM_PTR(&mod_os_kickstart_obj) },
+    { MP_ROM_QSTR(MP_QSTR__chipmem), MP_ROM_PTR(&mod_os_chipmem_obj) },
+    { MP_ROM_QSTR(MP_QSTR__fastmem), MP_ROM_PTR(&mod_os_fastmem_obj) },
 };
 static MP_DEFINE_CONST_DICT(os_module_globals, os_module_globals_table);
 

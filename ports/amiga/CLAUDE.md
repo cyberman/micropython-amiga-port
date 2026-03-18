@@ -49,6 +49,7 @@ Compiler flags:
 | `modules/datetime.py` | Patched local copy of datetime (fixed __repr__) |
 | `modules/_ospath.py` | os.path implementation for AmigaOS path conventions |
 | `modules/os.py` | Frozen os module: re-exports uos, adds makedirs() and walk(), imports _ospath as path |
+| `modules/platform.py` | Frozen platform module: CPU/FPU/chipset/Kickstart detection via uos C helpers |
 | `patches/` | Patches to upstream MicroPython files (see patches/README.md) |
 | `run_tests.py` | Test runner: runs each test in a separate micropython process |
 
@@ -77,7 +78,7 @@ MicroPython bytecode is interpreted only.
 
 **ROM level CORE_FEATURES.** Intermediate feature level providing a functional REPL
 with essential builtins without excessive RAM usage. Additional modules (random,
-hashlib, errno, help) are explicitly enabled on top of this level.
+hashlib, errno, platform, help) are explicitly enabled on top of this level.
 
 **VFS_POSIX for file I/O.** `MICROPY_VFS=1` and `MICROPY_VFS_POSIX=1` enable
 full `open()`/`read()`/`write()`/`close()` support. The POSIX VFS is mounted at
@@ -174,6 +175,12 @@ using dos.library. The frozen `os.py` re-exports everything from `uos` and adds
   DateStamp converted to Unix epoch (+252460800s offset).
 - `system(cmd)`: execute shell command via libnix system().
 - `_stat_type(path)`: 0=not found, 1=dir, 2=file (used by _ospath).
+- `_cpu()`: CPU string from SysBase->AttnFlags (68000/68020/68030/68040/68060).
+- `_fpu()`: FPU string from AttnFlags (none/68881/68882/68040-60 internal).
+- `_chipset()`: "OCS", "ECS" or "AGA" from GfxBase->ChipRevBits0.
+- `_kickstart()`: "version.revision" from SysBase (lib_Version + SoftVer).
+- `_chipmem()`: available chip RAM in bytes (AvailMem).
+- `_fastmem()`: available fast RAM in bytes (AvailMem).
 - `sep`: `"/"`.
 
 ### Python extensions (os.py)
@@ -225,6 +232,7 @@ embedded in the C binary via `frozen_content.c`. Importable without a filesystem
 | `datetime` | local copy `modules/datetime.py` | `time` (C extmod) |
 | `_ospath` | local `modules/_ospath.py` | `uos` (C module) |
 | `os` | local `modules/os.py` | `uos` (C module), `_ospath` |
+| `platform` | local `modules/platform.py` | `uos` (C module), `sys` |
 
 ### Adding a frozen module
 
@@ -306,6 +314,7 @@ Console is restored to cooked mode in crash handlers (`nlr_jump_fail`,
 - `random`: random, randint, randrange, choice, uniform
 - `hashlib`: sha256 (built-in, no TLS needed; MD5/SHA1 not available)
 - `errno`: POSIX error constants
+- `platform`: system/CPU/FPU/chipset/Kickstart detection (frozen, uses uos C helpers)
 
 ### Frozen (Python modules embedded in binary)
 
@@ -313,6 +322,7 @@ Console is restored to cooked mode in crash handlers (`nlr_jump_fail`,
 - `datetime`: date, time, datetime, timedelta (patched local copy)
 - `_ospath`: os.path for AmigaOS
 - `os`: os module wrapper (makedirs, walk, path)
+- `platform`: system, machine, processor, version, fpu, chipset, amiga_info
 
 ### Port-added builtins
 

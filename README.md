@@ -25,7 +25,9 @@ reviewed and validated by a human before being committed.
 - **os.path**: join, split, basename, dirname, exists, isfile, isdir, abspath,
   normpath (with AmigaOS volume:path conventions)
 - **Modules**: re, json, math, struct, binascii, base64, time, datetime,
-  random, hashlib (sha256), errno, gc, sys, io
+  random, hashlib (sha256), errno, platform, gc, sys, io
+- **Platform detection**: `platform.amiga_info()` shows CPU, FPU, chipset,
+  Kickstart version, and available memory
 
 ## Quick Start
 
