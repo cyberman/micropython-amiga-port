@@ -114,6 +114,24 @@ static void do_repl(void) {
     mp_hal_stdout_tx_str("Bye!\n");
 }
 
+// Execute a string of Python code (for -c option). Returns 0 on success.
+static int do_str(const char *str) {
+    nlr_buf_t nlr;
+    if (nlr_push(&nlr) == 0) {
+        mp_lexer_t *lex = mp_lexer_new_from_str_len(
+            MP_QSTR__lt_stdin_gt_, str, strlen(str), 0);
+        qstr source_name = lex->source_name;
+        mp_parse_tree_t parse_tree = mp_parse(lex, MP_PARSE_FILE_INPUT);
+        mp_obj_t module_fun = mp_compile(&parse_tree, source_name, false);
+        mp_call_function_0(module_fun);
+        nlr_pop();
+        return 0;
+    } else {
+        mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);
+        return 1;
+    }
+}
+
 // Execute a .py script file. Returns 0 on success, non-zero on error.
 static int do_file(const char *filename) {
     FILE *f = fopen(filename, "r");
@@ -159,7 +177,11 @@ int main(int argc, char **argv) {
     CurrentDir(original_dir);
 
     int ret = 0;
-    if (argc > 1) {
+    if (argc >= 3 && strcmp(argv[1], "-c") == 0) {
+        vm_init(argc - 1, argv + 1); // sys.argv = ['-c', ...]  skipping the code string
+        ret = do_str(argv[2]);
+        mp_deinit();
+    } else if (argc > 1) {
         vm_init(argc, argv);
         ret = do_file(argv[1]);
         mp_deinit();
