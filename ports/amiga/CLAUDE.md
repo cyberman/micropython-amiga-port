@@ -261,6 +261,14 @@ AmiTCP) to be running.
 - `setsockopt(level, optname, value)`, `setblocking(flag)` (no-op)
 - `close()`, `fileno()`
 
+### Cleanup
+
+- Socket objects have a `__del__` finalizer that calls `close()` on the fd.
+- `gc_sweep_all()` is called before `mp_deinit()` on all exit paths to ensure
+  orphaned sockets are closed before shutdown.
+- On crash (`nlr_jump_fail`, `__assert_func`), libnix closes bsdsocket.library
+  via `exit()`, which releases all associated sockets.
+
 ### Limitations
 
 - Sockets are always blocking (no non-blocking/timeout support)

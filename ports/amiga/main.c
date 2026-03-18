@@ -231,14 +231,17 @@ int main(int argc, char **argv) {
     if (argc >= 3 && strcmp(argv[1], "-c") == 0) {
         vm_init(argc - 1, argv + 1); // sys.argv = ['-c', ...]  skipping the code string
         ret = do_str(argv[2]);
+        gc_sweep_all();
         mp_deinit();
     } else if (argc > 1) {
         vm_init(argc, argv);
         ret = do_file(argv[1]);
+        gc_sweep_all();
         mp_deinit();
     } else {
         vm_init(argc, argv);
         do_repl();
+        gc_sweep_all();
         mp_deinit();
     }
 

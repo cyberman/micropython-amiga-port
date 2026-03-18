@@ -243,8 +243,15 @@ static mp_obj_t socket_fileno(mp_obj_t self_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(socket_fileno_obj, socket_fileno);
 
+// socket.__del__() — ensure fd is closed when GC collects the object
+static mp_obj_t socket___del__(mp_obj_t self_in) {
+    return socket_close(self_in);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(socket___del___obj, socket___del__);
+
 // Socket methods table
 static const mp_rom_map_elem_t socket_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&socket___del___obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&socket_close_obj) },
     { MP_ROM_QSTR(MP_QSTR_bind), MP_ROM_PTR(&socket_bind_obj) },
     { MP_ROM_QSTR(MP_QSTR_listen), MP_ROM_PTR(&socket_listen_obj) },
