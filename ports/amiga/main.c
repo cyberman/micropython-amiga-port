@@ -16,6 +16,8 @@
 #include "py/stackctrl.h"
 #include "shared/runtime/gchelper.h"
 #include "shared/runtime/pyexec.h"
+#include "extmod/vfs.h"
+#include "extmod/vfs_posix.h"
 #include "genhdr/mpversion.h"
 #include "genhdr/amigaversion.h"
 
@@ -133,6 +135,14 @@ static void vm_init(int argc, char **argv) {
     mp_stack_ctrl_init();
     mp_stack_set_top(stack_top);
     mp_init();
+    // Mount POSIX VFS at root so open() works
+    {
+        mp_obj_t vfs_obj = MP_OBJ_TYPE_GET_SLOT(&mp_type_vfs_posix, make_new)(
+            &mp_type_vfs_posix, 0, 0, NULL);
+        mp_obj_t mount_args[2] = { vfs_obj, MP_OBJ_NEW_QSTR(MP_QSTR__slash_) };
+        mp_vfs_mount(2, mount_args, (mp_map_t *)&mp_const_empty_map);
+        MP_STATE_VM(vfs_cur) = MP_STATE_VM(vfs_mount_table);
+    }
     // Populate sys.argv with argv[1:] (mp_init already created the empty list)
     for (int i = 1; i < argc; i++) {
         mp_obj_list_append(mp_sys_argv,
@@ -177,39 +187,11 @@ void gc_collect(void) {
     gc_collect_end();
 }
 
-mp_lexer_t *mp_lexer_new_from_file(qstr filename) {
-    const char *fname = qstr_str(filename);
-    FILE *f = fopen(fname, "r");
-    if (f == NULL) {
-        mp_raise_OSError(MP_ENOENT);
-    }
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    char *buf = m_new(char, size + 1);
-    long got = fread(buf, 1, size, f);
-    fclose(f);
-    buf[got] = '\0';
-    return mp_lexer_new_from_str_len(filename, buf, got, got + 1);
-}
+// mp_lexer_new_from_file() is provided by READER_VFS
 
-// Stub for open() — no filesystem support yet
-mp_obj_t mp_builtin_open(size_t n_args, const mp_obj_t *args, mp_map_t *kwargs) {
-    (void)n_args;
-    (void)args;
-    (void)kwargs;
-    mp_raise_OSError(MP_ENOENT);
-}
-MP_DEFINE_CONST_FUN_OBJ_KW(mp_builtin_open_obj, 1, mp_builtin_open);
+// open() is provided by VFS_POSIX (mp_vfs_open)
 
-mp_import_stat_t mp_import_stat(const char *path) {
-    FILE *f = fopen(path, "r");
-    if (f == NULL) {
-        return MP_IMPORT_STAT_NO_EXIST;
-    }
-    fclose(f);
-    return MP_IMPORT_STAT_FILE;
-}
+// mp_import_stat() is provided by VFS_POSIX
 
 void nlr_jump_fail(void *val) {
     (void)val;

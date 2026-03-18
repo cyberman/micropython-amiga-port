@@ -18,6 +18,17 @@ static inline uint64_t mp_hal_time_ns(void) {
 
 static inline void mp_hal_set_interrupt_char(char c) { (void)c; }
 
+// No EINTR on AmigaOS, so just execute the syscall once.
+#include <errno.h>
+#define MP_HAL_RETRY_SYSCALL(ret, syscall, raise) { \
+    (ret) = (syscall); \
+    if ((ret) == -1) { \
+        int err = errno; \
+        (void)err; \
+        raise; \
+    } \
+}
+
 // Line-buffered readline for the REPL and input() builtin.
 char *amiga_prompt(const char *p);
 
