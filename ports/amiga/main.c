@@ -280,21 +280,19 @@ int main(int argc, char **argv) {
         mp_deinit();
     }
 
-    // Cleanup AmiSSL if it was initialized
     extern void amissl_cleanup(void);
     amissl_cleanup();
 
-    // Free dynamically allocated heap.
     if (heap != NULL) {
         FreeMem(heap, heap_size);
         heap = NULL;
     }
 
-    // Restore the shell's original directory.
     CurrentDir(original_dir);
 
-    restore_stack();
-    return ret;
+    // Use _exit() to stay on our 64KB stack — the shell's 4KB stack
+    // is too small for libnix exit cleanup.
+    _exit(ret);
 }
 
 void gc_collect(void) {
@@ -317,8 +315,9 @@ void nlr_jump_fail(void *val) {
         FreeMem(heap, heap_size);
         heap = NULL;
     }
-    restore_stack();
-    exit(1);
+    // Note: restore_stack() may crash on tiny shell stacks, but we skip
+    // it for normal exit. For crash paths, _exit() on our big stack is safer.
+    _exit(1);
 }
 
 #ifndef NDEBUG
@@ -330,7 +329,6 @@ void __assert_func(const char *file, int line, const char *func, const char *exp
         FreeMem(heap, heap_size);
         heap = NULL;
     }
-    restore_stack();
-    exit(1);
+    _exit(1);
 }
 #endif

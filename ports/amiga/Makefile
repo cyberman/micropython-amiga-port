@@ -22,7 +22,7 @@ CFLAGS += -fdata-sections -ffunction-sections
 CFLAGS += -Wno-error
 
 LDFLAGS += -noixemul -m68020 -Wl,--gc-sections
-LIB += -lm -lsocket -lamisslauto -lamisslstubs
+LIB += -lm -lsocket -lamisslstubs
 
 CSUPEROPT = -Os
 

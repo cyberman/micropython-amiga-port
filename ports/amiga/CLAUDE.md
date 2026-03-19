@@ -115,7 +115,9 @@ via `AllocMem(heap_size, MEMF_ANY | MEMF_CLEAR)`. Size is configurable via the
 **Stack 128 KB + StackSwap.** `long __stack = 131072;` in main.c tells libnix to
 allocate 128 KB of stack. Additionally, `ensure_stack()` checks the actual stack
 at the start of `main()` and uses `StackSwap()` to allocate a 64 KB stack if the
-shell didn't provide enough. `restore_stack()` is called on all exit paths.
+shell didn't provide enough. At exit, `_exit()` is used instead of `return` to
+stay on the 64 KB stack (the shell's original stack may be too small for libnix
+exit cleanup). The swapped stack memory is intentionally leaked at exit.
 
 **extmod.mk included.** The Makefile includes `extmod/extmod.mk` to compile C
 extension modules (re, json, binascii, time, random, hashlib, errno...). Objects
@@ -289,10 +291,14 @@ Native C module providing TLS via AmiSSL (AmigaOS OpenSSL wrapper). Requires
 - Uses a custom BIO that routes I/O through libnix `send()`/`recv()` with
   `__attribute__((saveds))` callbacks (required for A4 register restoration
   when called from AmiSSL shared library).
-- AmiSSL initialization is done manually (`OpenLibrary` → `InitAmiSSLMaster` →
+- AmiSSL initialization is fully manual (`OpenLibrary` → `InitAmiSSLMaster` →
   `OpenAmiSSL` → `InitAmiSSL` with `SocketBase` and `errno` pointer).
+  No `-lamisslauto` to avoid destructor conflicts at exit.
 - A single global `SSL_CTX` is shared across all connections.
-- `amissl_cleanup()` is called before exit to free the context and close libraries.
+- `amissl_cleanup()` does full teardown: `SSL_CTX_free` → `CleanupAmiSSL` →
+  `CloseAmiSSL` → `CloseLibrary`.
+- SSLSocket `__del__` is GC-safe: calls `SSL_free` + `close(fd)` directly,
+  skips `SSL_shutdown` (I/O unsafe during GC) and Python method calls.
 
 ### Functions
 
@@ -302,7 +308,10 @@ Native C module providing TLS via AmiSSL (AmigaOS OpenSSL wrapper). Requires
 
 ### Link flags
 
-`-lamisslauto -lamisslstubs` in the Makefile (after `-lsocket`).
+`-lamisslstubs` in the Makefile (after `-lsocket`). Note: `-lamisslauto` is NOT
+used — it caused exit crashes due to its destructor double-closing AmiSSL
+libraries. All AmiSSL open/close is done manually in `ensure_amissl_init()` and
+`amissl_cleanup()`.
 
 ## Module time (AmigaOS)
 

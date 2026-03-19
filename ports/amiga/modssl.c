@@ -4,6 +4,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <sys/socket.h>
 
 #include "py/runtime.h"
@@ -19,14 +20,14 @@
 #include <openssl/err.h>
 #include <openssl/bio.h>
 
-// libamisslauto references a plain 'errno' symbol, but libnix defines
-// errno as a macro (*__errno). Provide a global for the linker.
+// libnix errno is a macro (*__errno). AmiSSL needs a plain 'errno' symbol.
 int amiga_errno_storage __asm("_errno");
 
-// AmiSSL bases — defined by libamisslauto.a
-extern struct Library *AmiSSLMasterBase;
-extern struct Library *AmiSSLBase;
-extern struct Library *AmiSSLExtBase;
+// AmiSSL library bases — owned by us (no libamisslauto)
+struct Library *AmiSSLMasterBase = NULL;
+struct Library *AmiSSLBase = NULL;
+struct Library *AmiSSLExtBase = NULL;
+// SocketBase is provided by libsocket
 extern struct Library *SocketBase;
 
 static SSL_CTX *global_ctx = NULL;
@@ -101,39 +102,42 @@ static BIO_METHOD *BIO_s_amiga(void) {
 static void ensure_amissl_init(void) {
     if (amissl_initialized) return;
 
-    // If libamisslauto's auto-init didn't run, do manual init
+    // Full manual AmiSSL initialization (no libamisslauto)
+    AmiSSLMasterBase = OpenLibrary("amisslmaster.library", AMISSLMASTER_MIN_VERSION);
     if (!AmiSSLMasterBase) {
-        AmiSSLMasterBase = OpenLibrary("amisslmaster.library", AMISSLMASTER_MIN_VERSION);
-        if (!AmiSSLMasterBase) {
-            mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("Cannot open amisslmaster.library"));
-        }
+        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("Cannot open amisslmaster.library"));
+    }
 
-        if (!InitAmiSSLMaster(AMISSL_CURRENT_VERSION, TRUE)) {
-            CloseLibrary(AmiSSLMasterBase);
-            AmiSSLMasterBase = NULL;
-            mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("InitAmiSSLMaster failed"));
-        }
+    if (!InitAmiSSLMaster(AMISSL_CURRENT_VERSION, TRUE)) {
+        CloseLibrary(AmiSSLMasterBase);
+        AmiSSLMasterBase = NULL;
+        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("InitAmiSSLMaster failed"));
+    }
 
-        AmiSSLBase = OpenAmiSSL();
-        if (!AmiSSLBase) {
-            CloseLibrary(AmiSSLMasterBase);
-            AmiSSLMasterBase = NULL;
-            mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("Cannot open AmiSSL"));
-        }
+    AmiSSLBase = OpenAmiSSL();
+    if (!AmiSSLBase) {
+        CloseLibrary(AmiSSLMasterBase);
+        AmiSSLMasterBase = NULL;
+        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("Cannot open AmiSSL"));
+    }
 
-        if (InitAmiSSL(AmiSSL_SocketBase, SocketBase,
-                       AmiSSL_ErrNoPtr, &amiga_errno_storage,
-                       TAG_DONE) != 0) {
-            CloseAmiSSL();
-            CloseLibrary(AmiSSLMasterBase);
-            AmiSSLBase = NULL;
-            AmiSSLMasterBase = NULL;
-            mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("InitAmiSSL failed"));
-        }
+    if (InitAmiSSL(AmiSSL_SocketBase, SocketBase,
+                   AmiSSL_ErrNoPtr, &amiga_errno_storage,
+                   TAG_DONE) != 0) {
+        CloseAmiSSL();
+        CloseLibrary(AmiSSLMasterBase);
+        AmiSSLBase = NULL;
+        AmiSSLMasterBase = NULL;
+        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("InitAmiSSL failed"));
     }
 
     global_ctx = SSL_CTX_new(TLS_client_method());
     if (!global_ctx) {
+        CleanupAmiSSL(TAG_DONE);
+        CloseAmiSSL();
+        CloseLibrary(AmiSSLMasterBase);
+        AmiSSLBase = NULL;
+        AmiSSLMasterBase = NULL;
         mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("Cannot create SSL context"));
     }
 
@@ -141,7 +145,7 @@ static void ensure_amissl_init(void) {
     amissl_initialized = 1;
 }
 
-// Cleanup AmiSSL — called before exit
+// Full AmiSSL cleanup — we own everything (no libamisslauto).
 void amissl_cleanup(void) {
     if (global_ctx) {
         SSL_CTX_free(global_ctx);
@@ -153,13 +157,15 @@ void amissl_cleanup(void) {
     }
     if (amissl_initialized && AmiSSLBase) {
         CleanupAmiSSL(TAG_DONE);
+    }
+    if (AmiSSLBase) {
         CloseAmiSSL();
+        AmiSSLBase = NULL;
     }
     if (AmiSSLMasterBase) {
         CloseLibrary(AmiSSLMasterBase);
         AmiSSLMasterBase = NULL;
     }
-    AmiSSLBase = NULL;
     AmiSSLExtBase = NULL;
     amissl_initialized = 0;
 }
@@ -208,6 +214,8 @@ static mp_obj_t ssl_socket_send(mp_obj_t self_in, mp_obj_t data_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(ssl_socket_send_obj, ssl_socket_send);
 
+// Explicit close() — safe to call from Python code.
+// Does SSL_shutdown (sends close_notify) then closes underlying socket.
 static mp_obj_t ssl_socket_close(mp_obj_t self_in) {
     mp_obj_ssl_socket_t *self = MP_OBJ_TO_PTR(self_in);
     if (self->ssl) {
@@ -215,18 +223,33 @@ static mp_obj_t ssl_socket_close(mp_obj_t self_in) {
         SSL_free(self->ssl);  // also frees the BIO attached via SSL_set_bio
         self->ssl = NULL;
     }
-    if (self->sock != mp_const_none) {
+    if (self->fd >= 0 && self->sock != mp_const_none) {
         mp_obj_t close_method[2];
         mp_load_method(self->sock, MP_QSTR_close, close_method);
         mp_call_method_n_kw(0, 0, close_method);
         self->sock = mp_const_none;
+        self->fd = -1;
     }
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(ssl_socket_close_obj, ssl_socket_close);
 
+// GC-safe __del__ — called during gc_sweep, must NOT do I/O or call Python.
+// SSL_shutdown is skipped (it does network I/O via BIO send, unsafe if
+// the underlying socket fd was already closed by its own __del__).
+// mp_load_method/mp_call are skipped (unsafe during GC sweep).
 static mp_obj_t ssl_socket___del__(mp_obj_t self_in) {
-    return ssl_socket_close(self_in);
+    mp_obj_ssl_socket_t *self = MP_OBJ_TO_PTR(self_in);
+    if (self->ssl) {
+        SSL_free(self->ssl);  // frees SSL + BIO memory, no I/O
+        self->ssl = NULL;
+    }
+    if (self->fd >= 0) {
+        close(self->fd);      // close fd directly, no Python calls
+        self->fd = -1;
+    }
+    self->sock = mp_const_none;
+    return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(ssl_socket___del___obj, ssl_socket___del__);
 
