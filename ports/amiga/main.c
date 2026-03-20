@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <setjmp.h>
 #include <stddef.h>
 #include "py/builtin.h"
 #include "py/mpstate.h"
@@ -245,8 +244,15 @@ int main(int argc, char **argv) {
     // Ensure we have enough stack (swap if shell didn't provide enough)
     ensure_stack();
 
-    int stack_dummy;
-    stack_top = (char *)&stack_dummy;
+    // Set stack_top to the actual stack in use.
+    // If we swapped, main()'s frame is on the old shell stack —
+    // use the top of our new stack instead.
+    if (stack_swapped) {
+        stack_top = new_stack + MIN_STACK_SIZE;
+    } else {
+        int stack_dummy;
+        stack_top = (char *)&stack_dummy;
+    }
 
     // Save the shell's current directory lock so we can restore it on exit.
     original_dir = CurrentDir(0);

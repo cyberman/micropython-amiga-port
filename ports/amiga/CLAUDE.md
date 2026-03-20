@@ -116,9 +116,9 @@ via `AllocMem(heap_size, MEMF_ANY | MEMF_CLEAR)`. Size is configurable via the
 **Stack 128 KB + StackSwap.** `long __stack = 131072;` in main.c tells libnix to
 allocate 128 KB of stack. Additionally, `ensure_stack()` checks the actual stack
 at the start of `main()` and uses `StackSwap()` to allocate a 64 KB stack if the
-shell didn't provide enough. At exit, `_exit()` is used instead of `return` to
-stay on the 64 KB stack (the shell's original stack may be too small for libnix
-exit cleanup). The swapped stack memory is intentionally leaked at exit.
+shell didn't provide enough. After the swap, `stack_top` is set to the top of the
+new stack (not main's frame on the old shell stack) — critical for GC stack
+scanning. At exit, `restore_stack()` frees the allocation before `_exit()`.
 
 **extmod.mk included.** The Makefile includes `extmod/extmod.mk` to compile C
 extension modules (re, json, binascii, time, random, hashlib, errno...). Objects
