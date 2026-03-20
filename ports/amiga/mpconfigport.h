@@ -1,11 +1,11 @@
 #include <stdint.h>
 
-// NDEBUG removed — assertions re-enabled (gc stack_top bug is fixed)
-
 // MicroPython port configuration for AmigaOS m68k
 
-// Use core features level - gives us a useful REPL without bloat
-#define MICROPY_CONFIG_ROM_LEVEL        (MICROPY_CONFIG_ROM_LEVEL_CORE_FEATURES)
+// Use EVERYTHING level for maximum Python compatibility (f-strings, advanced
+// builtins, OrderedDict, set operations, etc). Features not available on
+// AmigaOS are explicitly disabled below.
+#define MICROPY_CONFIG_ROM_LEVEL        (MICROPY_CONFIG_ROM_LEVEL_EVERYTHING)
 
 // Compiler and REPL
 #define MICROPY_ENABLE_COMPILER         (1)
@@ -25,10 +25,6 @@
 // Use setjmp-based NLR (no native m68k NLR implementation)
 #define MICROPY_NLR_SETJMP              (1)
 
-// Frozen modules: controlled by FROZEN_MANIFEST in Makefile.
-// When set, mkrules.mk defines MICROPY_MODULE_FROZEN_MPY and
-// MICROPY_QSTR_EXTRA_POOL automatically via CFLAGS.
-
 // Memory
 #define MICROPY_ALLOC_PATH_MAX          (256)
 #define MICROPY_ALLOC_PARSE_CHUNK_INIT  (16)
@@ -37,57 +33,89 @@
 #define MICROPY_QSTR_BYTES_IN_HASH      (2)
 #define MICROPY_HEAP_SIZE               (128 * 1024) // 128 KB
 
-// Disable features requiring POSIX or threading
-#define MICROPY_PY_THREAD               (0)
+// --- Features NOT available on AmigaOS ---
+
+// No native code emitters (not m68k)
 #define MICROPY_EMIT_X64                (0)
 #define MICROPY_EMIT_X86                (0)
 #define MICROPY_EMIT_THUMB              (0)
 #define MICROPY_EMIT_ARM                (0)
 #define MICROPY_EMIT_INLINE_THUMB       (0)
 #define MICROPY_EMIT_INLINE_THUMB_FLOAT (0)
+#define MICROPY_EMIT_INLINE_RV32        (0)
+
+// No threading (no pthreads on AmigaOS)
+#define MICROPY_PY_THREAD               (0)
+
+// No POSIX-specific modules
+#define MICROPY_PY_FFI                  (0)
+#define MICROPY_PY_TERMIOS              (0)
+#define MICROPY_PY_SIGNAL               (0)
+#define MICROPY_PY_SELECT               (0)
+
+// No network stack / hardware modules (we have our own modsocket.c/modssl.c)
+#define MICROPY_PY_SOCKET               (0)
+#define MICROPY_PY_NETWORK              (0)
+#define MICROPY_PY_BLUETOOTH            (0)
+#define MICROPY_PY_LWIP                 (0)
+#define MICROPY_PY_OPENAMP              (0)
+#define MICROPY_PY_MACHINE              (0)
+#define MICROPY_PY_ONEWIRE             (0)
+
+// We have our own os module (modamigaos.c)
+#define MICROPY_PY_OS                   (0)
+
+// We have our own ssl module (modssl.c)
+#define MICROPY_PY_SSL                  (0)
+
+// EVERYTHING enables sys std files but we don't provide stream objects
+#define MICROPY_PY_SYS_STDFILES         (0)
+#define MICROPY_PY_SYS_STDIO_BUFFER     (0)
+
+// No atexit / executable / dupterm
+#define MICROPY_PY_SYS_ATEXIT           (0)
+#define MICROPY_PY_SYS_EXECUTABLE       (0)
+#define MICROPY_PY_OS_DUPTERM           (0)
+
+// No .mpy saving or marshal
+#define MICROPY_PERSISTENT_CODE_SAVE    (0)
+#define MICROPY_PERSISTENT_CODE_SAVE_FILE (0)
+#define MICROPY_PERSISTENT_CODE_SAVE_FUN (0)
+#define MICROPY_PERSISTENT_CODE_LOAD    (0)
+#define MICROPY_PY_MARSHAL              (0)
+
+// No alternative VFS implementations
+#define MICROPY_VFS_FAT                 (0)
+#define MICROPY_VFS_LFS1                (0)
+#define MICROPY_VFS_LFS2                (0)
+#define MICROPY_VFS_ROM                 (0)
+
+// No raw file I/O (we use POSIX VFS)
+#define MICROPY_PY_IO_FILEIO            (0)
+
+// libnix missing math functions
+#define MICROPY_PY_MATH_SPECIAL_FUNCTIONS (0)
+
+// MD5/SHA1 require mbedTLS/axTLS (not available)
+#define MICROPY_PY_HASHLIB_MD5          (0)
+#define MICROPY_PY_HASHLIB_SHA1         (0)
+
+// --- Features explicitly ENABLED ---
+
 #define MICROPY_ENABLE_FINALISER        (1)
 #define MICROPY_VFS                     (1)
 #define MICROPY_VFS_POSIX               (1)
 #define MICROPY_READER_VFS              (1)
-#define MICROPY_PY_FFI                  (0)
-#define MICROPY_PY_TERMIOS              (0)
-#define MICROPY_PY_SIGNAL               (0)
-
-// Disable sys features not useful on AmigaOS
-#define MICROPY_PY_SYS_MODULES          (0)
 #define MICROPY_PY_SYS_EXIT             (1)
-// sys.path is required for frozen module imports (.frozen/ prefix)
 #define MICROPY_PY_SYS_PATH             (1)
 #define MICROPY_PY_SYS_ARGV             (1)
 #define MICROPY_PY_SYS_PLATFORM         (1)
-
-// Arbitrary-precision integers (needed by frozen datetime module)
 #define MICROPY_LONGINT_IMPL            (MICROPY_LONGINT_IMPL_MPZ)
-
-// Enable useful builtins and modules
-#define MICROPY_PY_MATH                 (1)
 #define MICROPY_FLOAT_IMPL              (MICROPY_FLOAT_IMPL_FLOAT)
-#define MICROPY_PY_IO                   (1)
-#define MICROPY_PY_OS                   (0)
-#define MICROPY_PY_RE                   (1)
-#define MICROPY_PY_JSON                 (1)
-#define MICROPY_PY_BINASCII             (1)
-#define MICROPY_PY_BUILTINS_BYTES_HEX  (1)
-#define MICROPY_PY_RANDOM               (1)
-#define MICROPY_PY_RANDOM_EXTRA_FUNCS  (1)
-#define MICROPY_PY_HASHLIB             (1)
-// MD5/SHA1 require mbedTLS or axTLS (not available). SHA256 has a built-in impl.
-#define MICROPY_PY_HASHLIB_MD5         (0)
-#define MICROPY_PY_HASHLIB_SHA1        (0)
-#define MICROPY_PY_HASHLIB_SHA256      (1)
-#define MICROPY_PY_ERRNO               (1)
-#define MICROPY_PY_TIME                 (1)
-#define MICROPY_PY_TIME_GMTIME_LOCALTIME_MKTIME (1)
-#define MICROPY_PY_TIME_TIME_TIME_NS    (1)
 #define MICROPY_PY_TIME_INCLUDEFILE     "ports/amiga/modtime.c"
 #define MICROPY_EPOCH_IS_1970           (1)
-#define MICROPY_PY_DEFLATE              (1)
 #define MICROPY_PY_DEFLATE_COMPRESS     (1)
+#define MICROPY_GCREGS_SETJMP           (1)
 
 // quit() and exit() builtins
 extern const struct _mp_obj_fun_builtin_var_t mp_builtin_quit_obj;
@@ -96,9 +124,6 @@ extern const struct _mp_obj_fun_builtin_var_t mp_builtin_exit_obj;
     { MP_ROM_QSTR(MP_QSTR_quit), MP_ROM_PTR(&mp_builtin_quit_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_exit), MP_ROM_PTR(&mp_builtin_exit_obj) },
 
-// GC uses setjmp to capture registers
-#define MICROPY_GCREGS_SETJMP           (1)
-
 // Type definitions for m68k
 typedef int32_t mp_int_t;
 typedef uint32_t mp_uint_t;
@@ -106,7 +131,6 @@ typedef long mp_off_t;
 
 #define MP_SSIZE_MAX INT32_MAX
 
-// We need alloca
 #include <alloca.h>
 
 #define MICROPY_HW_BOARD_NAME           "Amiga"

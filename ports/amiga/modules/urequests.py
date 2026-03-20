@@ -83,7 +83,16 @@ class Response:
 
     @property
     def text(self):
-        return self.content.decode(self.encoding)
+        try:
+            return self.content.decode(self.encoding)
+        except (UnicodeError, ValueError):
+            # MicroPython only supports utf-8 decode.
+            # Replace non-ASCII bytes with '?' to make valid utf-8.
+            b = self.content
+            arr = bytearray(len(b))
+            for i in range(len(b)):
+                arr[i] = b[i] if b[i] < 128 else 63  # 63 = '?'
+            return arr.decode()
 
     @property
     def content(self):

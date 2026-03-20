@@ -224,6 +224,7 @@ static void vm_init(int argc, char **argv) {
     gc_init(heap, heap + heap_size);
     mp_stack_ctrl_init();
     mp_stack_set_top(stack_top);
+    mp_stack_set_limit(40000);  // 40KB for Python, leaves ~24KB for C calls
     mp_init();
     // Mount POSIX VFS at root so open() works
     {

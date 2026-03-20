@@ -80,9 +80,12 @@ epoch calculations.
 **No native emitters.** All native emitters (x64, x86, thumb, ARM) are disabled.
 MicroPython bytecode is interpreted only.
 
-**ROM level CORE_FEATURES.** Intermediate feature level providing a functional REPL
-with essential builtins without excessive RAM usage. Additional modules (random,
-hashlib, errno, platform, help) are explicitly enabled on top of this level.
+**ROM level EVERYTHING.** Maximum Python compatibility: f-strings, set operations,
+OrderedDict, advanced slicing, descriptors, async/await, generators, and more.
+Features not available on AmigaOS (threading, networking stack, native emitters,
+machine module, alternative VFS, etc.) are explicitly disabled in mpconfigport.h.
+`mp_stack_set_limit(40000)` is called in `vm_init()` (required because EVERYTHING
+enables `MICROPY_STACK_CHECK`).
 
 **VFS_POSIX for file I/O.** `MICROPY_VFS=1` and `MICROPY_VFS_POSIX=1` enable
 full `open()`/`read()`/`write()`/`close()` support. The POSIX VFS is mounted at
@@ -127,7 +130,7 @@ go through `PY_O` (not `PY_CORE_O`) to include everything.
 ## m68k GC Alignment (Critical)
 
 On m68k with `MICROPY_OBJ_REPR_A`, object pointers must be 4-byte aligned
-(bits 1:0 == 0). Without `MICROPY_STACK_CHECK` (disabled at CORE_FEATURES level),
+(bits 1:0 == 0). Without the `_gc_lock_pad` fix,
 the struct layout of `mp_state_thread_t` is:
 
 ```
@@ -361,7 +364,7 @@ Console is restored to cooked mode in crash handlers (`nlr_jump_fail`,
 
 ## Enabled Modules
 
-### Always active (CORE_FEATURES)
+### Always active (EVERYTHING)
 
 - `builtins`: basic Python functions (print, len, range, etc.)
 - `gc`: garbage collector control

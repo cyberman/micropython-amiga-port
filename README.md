@@ -15,6 +15,8 @@ reviewed and validated by a human before being committed.
 
 ## Features
 
+- **Full Python compatibility** (ROM_LEVEL_EVERYTHING): f-strings, set operations,
+  OrderedDict, advanced slicing, descriptors, async/await, and more
 - **Interactive REPL** with readline support (cursor keys, command history)
 - **Script execution**: `micropython script.py [args...]`
 - **Inline execution**: `micropython -c "print('hello')"`
