@@ -53,6 +53,7 @@ Compiler flags:
 | `modules/os.py` | Frozen os module: re-exports uos, adds makedirs() and walk(), imports _ospath as path |
 | `modules/platform.py` | Frozen platform module: CPU/FPU/chipset/Kickstart detection via uos C helpers |
 | `modules/urequests.py` | Frozen HTTP/1.1 client (GET, POST, PUT, DELETE, HEAD, chunked TE) |
+| `modules/gzip.py` | Frozen gzip module: CPython-compatible compress()/decompress() |
 | `patches/` | Patches to upstream MicroPython files (see patches/README.md) |
 | `run_tests.py` | Test runner: runs each test in a separate micropython process |
 
@@ -241,6 +242,7 @@ embedded in the C binary via `frozen_content.c`. Importable without a filesystem
 | `os` | local `modules/os.py` | `uos` (C module), `_ospath` |
 | `platform` | local `modules/platform.py` | `uos` (C module), `sys` |
 | `urequests` | local `modules/urequests.py` | `socket`, `ssl` (C modules), `json` |
+| `gzip` | local `modules/gzip.py` | `deflate`, `io` |
 
 ### Adding a frozen module
 
@@ -400,6 +402,7 @@ Console is restored to cooked mode in crash handlers (`nlr_jump_fail`,
 - `platform`: system, machine, processor, version, fpu, chipset, amiga_info
 - `urequests`: HTTP/1.1 HTTPS client with chunked TE, gzip decompression, buffered I/O
 - `deflate`: compression/decompression (raw deflate, zlib, gzip formats)
+- `gzip`: CPython-compatible gzip.compress()/gzip.decompress() (frozen, wraps deflate)
 
 ### Port-added builtins
 

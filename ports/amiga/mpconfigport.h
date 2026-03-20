@@ -113,6 +113,10 @@ typedef long mp_off_t;
 #define MICROPY_HW_BOARD_NAME           "Amiga"
 #define MICROPY_HW_MCU_NAME             "M68020"
 
-
+// Override sys.version to show MicroPython version + build instead of git hash
+#include "genhdr/amigaversion.h"
+#define MICROPY_BANNER_NAME_AND_VERSION \
+    "MicroPython v" MICROPY_VERSION_STRING " on " AMIGA_BUILD_TIMESTAMP \
+    " build " AMIGA_BUILD_NUM
 
 #define MP_STATE_PORT MP_STATE_VM
