@@ -28,7 +28,8 @@ reviewed and validated by a human before being committed.
   random, hashlib (sha256), errno, platform, socket, ssl, urequests, gc, sys, io
 - **Networking**: TCP/UDP sockets, DNS resolution via bsdsocket.library
 - **TLS/SSL**: HTTPS support via AmiSSL (requires amissl.library on Amiga)
-- **HTTP client**: `urequests.get()`, `post()`, `put()`, `delete()` (HTTP and HTTPS)
+- **HTTP client**: `urequests.get()`, `post()`, `put()`, `delete()` with HTTP/1.1,
+  chunked transfer encoding, HTTP and HTTPS
 - **Platform detection**: `platform.amiga_info()` shows CPU, FPU, chipset,
   Kickstart version, and available memory
 
@@ -36,7 +37,7 @@ reviewed and validated by a human before being committed.
 
 ### Requirements
 
-- [bebbo's m68k-amigaos-gcc toolchain](https://github.com/bebbo/amiga-gcc)
+- [bebbo's m68k-amigaos-gcc toolchain](https://franke.ms/git/bebbo/amiga-gcc)
   installed at `/opt/amiga/`
 - GNU Make (`gmake`)
 

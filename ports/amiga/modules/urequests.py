@@ -1,6 +1,7 @@
-# urequests — HTTP client for MicroPython AmigaOS port
-# Supports HTTP/1.0 GET, POST, PUT, DELETE, HEAD
-# No HTTPS (no TLS library available)
+# urequests — HTTP/1.1 client for MicroPython AmigaOS port
+# Supports GET, POST, PUT, DELETE, HEAD
+# Supports HTTP and HTTPS (via AmiSSL)
+# Handles chunked transfer encoding
 
 import socket
 
@@ -13,6 +14,42 @@ class Response:
         self.status_code = None
         self.reason = None
         self.headers = {}
+        self._buf = b""
+
+    def _read_raw(self, size):
+        """Read exact number of bytes from socket, using internal buffer."""
+        if len(self._buf) >= size:
+            result = self._buf[:size]
+            self._buf = self._buf[size:]
+            return result
+        parts = [self._buf]
+        have = len(self._buf)
+        self._buf = b""
+        while have < size:
+            chunk = self.raw.recv(min(4096, size - have))
+            if not chunk:
+                break
+            parts.append(chunk)
+            have = have + len(chunk)
+        data = b"".join(parts)
+        if len(data) > size:
+            self._buf = data[size:]
+            data = data[:size]
+        return data
+
+    def _read_line(self):
+        """Read a line ending with \\n, buffered."""
+        while b"\n" not in self._buf:
+            chunk = self.raw.recv(4096)
+            if not chunk:
+                line = self._buf
+                self._buf = b""
+                return line
+            self._buf = self._buf + chunk
+        idx = self._buf.index(b"\n") + 1
+        line = self._buf[:idx]
+        self._buf = self._buf[idx:]
+        return line
 
     def _read_headers(self):
         while True:
@@ -23,15 +60,26 @@ class Response:
                 k, v = line.split(b":", 1)
                 self.headers[k.decode().lower()] = v.strip().decode()
 
-    def _read_line(self):
-        line = b""
+    def _read_chunked(self):
+        """Read chunked transfer encoding using list accumulation."""
+        chunks = []
         while True:
-            b = self.raw.recv(1)
-            if not b:
-                return line
-            line = line + b
-            if line.endswith(b"\n"):
-                return line
+            line = self._read_line()
+            if not line:
+                break
+            size_str = line.strip()
+            if b";" in size_str:
+                size_str = size_str.split(b";")[0]
+            if not size_str:
+                break
+            chunk_size = int(size_str, 16)
+            if chunk_size == 0:
+                self._read_line()
+                break
+            chunk = self._read_raw(chunk_size)
+            chunks.append(chunk)
+            self._read_line()
+        return b"".join(chunks)
 
     @property
     def text(self):
@@ -40,22 +88,21 @@ class Response:
     @property
     def content(self):
         if self._cached is None:
-            cl = self.headers.get("content-length")
-            if cl:
-                cl = int(cl)
-                self._cached = b""
-                while len(self._cached) < cl:
-                    chunk = self.raw.recv(min(256, cl - len(self._cached)))
-                    if not chunk:
-                        break
-                    self._cached = self._cached + chunk
+            te = self.headers.get("transfer-encoding", "")
+            if "chunked" in te:
+                self._cached = self._read_chunked()
             else:
-                self._cached = b""
-                while True:
-                    chunk = self.raw.recv(256)
-                    if not chunk:
-                        break
-                    self._cached = self._cached + chunk
+                cl = self.headers.get("content-length")
+                if cl:
+                    self._cached = self._read_raw(int(cl))
+                else:
+                    chunks = []
+                    while True:
+                        chunk = self.raw.recv(4096)
+                        if not chunk:
+                            break
+                        chunks.append(chunk)
+                    self._cached = b"".join(chunks)
             if self.raw:
                 self.raw.close()
                 self.raw = None
@@ -72,7 +119,6 @@ class Response:
 
 
 def request(method, url, data=None, json_data=None, headers=None):
-    # Parse URL
     # Parse URL
     use_ssl = False
     if url.startswith("http://"):
@@ -109,9 +155,12 @@ def request(method, url, data=None, json_data=None, headers=None):
         import ssl
         s = ssl.wrap_socket(s, server_hostname=host)
 
-    # Build request
-    s.send(b"%s %s HTTP/1.0\r\n" % (method, path))
+    # Build request (HTTP/1.1 with Connection: close)
+    s.send(b"%s %s HTTP/1.1\r\n" % (method, path))
     s.send(b"Host: %s\r\n" % host)
+    s.send(b"Connection: close\r\n")
+    s.send(b"Accept-Encoding: identity\r\n")
+    s.send(b"User-Agent: MicroPython-Amiga/1.27\r\n")
 
     if headers:
         for k in headers:
@@ -135,7 +184,7 @@ def request(method, url, data=None, json_data=None, headers=None):
     # Parse response
     resp = Response(s)
     line = resp._read_line()
-    # HTTP/1.0 200 OK\r\n
+    # HTTP/1.1 200 OK\r\n
     parts = line.split(None, 2)
     resp.status_code = int(parts[1])
     resp.reason = parts[2].strip().decode() if len(parts) > 2 else ""
