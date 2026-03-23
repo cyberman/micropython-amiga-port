@@ -302,6 +302,11 @@ ARexx-capable AmigaOS application.
   Creates a private reply port, sends via PutMsg, waits with WaitPort.
   Result strings that aren't valid UTF-8 are returned as bytes (Latin-1 fallback).
 - `arexx.ports()`: returns a list of all public port names (snapshot under Forbid)
+- `arexx.Port(portname)`: persistent client class with reusable reply port.
+  Methods: `send(command, result=False)`, `close()`. Properties: `portname`, `closed`.
+  Context manager: `with arexx.Port("APP") as p: p.send("CMD")`
+  `__del__` finalizer for GC cleanup. Open ports tracked in a linked list for
+  `mod_arexx_deinit()` cleanup at exit.
 
 ### Cleanup
 

@@ -32,8 +32,9 @@ reviewed and validated by a human before being committed.
 - **TLS/SSL**: HTTPS support via AmiSSL (requires amissl.library on Amiga)
 - **HTTP client**: `urequests.get()`, `post()`, `put()`, `delete()` with HTTP/1.1,
   chunked transfer encoding, gzip decompression, HTTP and HTTPS
-- **ARexx IPC**: `arexx.send()`, `arexx.exists()`, `arexx.ports()` for
-  inter-process communication with AmigaOS applications
+- **ARexx IPC**: `arexx.send()`, `arexx.exists()`, `arexx.ports()`, and
+  `arexx.Port()` persistent client with context manager for inter-process
+  communication with AmigaOS applications
 - **Platform detection**: `platform.amiga_info()` shows CPU, FPU, chipset,
   Kickstart version, and available memory
 
