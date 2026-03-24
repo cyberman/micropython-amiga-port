@@ -263,6 +263,41 @@ static mp_obj_t mod_os_stat(mp_obj_t path_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mod_os_stat_obj, mod_os_stat);
 
+// os.chmod(path, flags) — set file protection bits via SetProtection().
+// RWED bits (0-3) are INVERTED on AmigaOS: 0 = allowed, 1 = denied.
+static mp_obj_t mod_os_chmod(mp_obj_t path_obj, mp_obj_t flags_obj) {
+    const char *path = mp_obj_str_get_str(path_obj);
+    LONG flags = mp_obj_get_int(flags_obj);
+    if (!SetProtection((CONST_STRPTR)path, flags)) {
+        mp_raise_OSError(MP_EIO);
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mod_os_chmod_obj, mod_os_chmod);
+
+// os.getprotect(path) — read file protection bits via Lock()/Examine().
+static mp_obj_t mod_os_getprotect(mp_obj_t path_obj) {
+    const char *path = mp_obj_str_get_str(path_obj);
+    BPTR lock = Lock((CONST_STRPTR)path, SHARED_LOCK);
+    if (lock == 0) {
+        mp_raise_OSError(MP_ENOENT);
+    }
+    struct FileInfoBlock *fib = AllocDosObject(DOS_FIB, NULL);
+    if (fib == NULL) {
+        UnLock(lock);
+        mp_raise_OSError(MP_ENOMEM);
+    }
+    BOOL ok = Examine(lock, fib);
+    LONG prot = fib->fib_Protection;
+    FreeDosObject(DOS_FIB, fib);
+    UnLock(lock);
+    if (!ok) {
+        mp_raise_OSError(MP_EIO);
+    }
+    return mp_obj_new_int(prot);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mod_os_getprotect_obj, mod_os_getprotect);
+
 // uos._cpu() — detect CPU from SysBase->AttnFlags.
 static mp_obj_t mod_os_cpu(void) {
     UWORD flags = SysBase->AttnFlags;
@@ -347,6 +382,17 @@ static const mp_rom_map_elem_t os_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR__kickstart), MP_ROM_PTR(&mod_os_kickstart_obj) },
     { MP_ROM_QSTR(MP_QSTR__chipmem), MP_ROM_PTR(&mod_os_chipmem_obj) },
     { MP_ROM_QSTR(MP_QSTR__fastmem), MP_ROM_PTR(&mod_os_fastmem_obj) },
+    { MP_ROM_QSTR(MP_QSTR_chmod), MP_ROM_PTR(&mod_os_chmod_obj) },
+    { MP_ROM_QSTR(MP_QSTR_getprotect), MP_ROM_PTR(&mod_os_getprotect_obj) },
+    // AmigaOS protection bit constants (RWED bits 0-3 are INVERTED: 0=allowed)
+    { MP_ROM_QSTR(MP_QSTR_FIBF_DELETE), MP_ROM_INT(FIBF_DELETE) },
+    { MP_ROM_QSTR(MP_QSTR_FIBF_EXECUTE), MP_ROM_INT(FIBF_EXECUTE) },
+    { MP_ROM_QSTR(MP_QSTR_FIBF_WRITE), MP_ROM_INT(FIBF_WRITE) },
+    { MP_ROM_QSTR(MP_QSTR_FIBF_READ), MP_ROM_INT(FIBF_READ) },
+    { MP_ROM_QSTR(MP_QSTR_FIBF_ARCHIVE), MP_ROM_INT(FIBF_ARCHIVE) },
+    { MP_ROM_QSTR(MP_QSTR_FIBF_PURE), MP_ROM_INT(FIBF_PURE) },
+    { MP_ROM_QSTR(MP_QSTR_FIBF_SCRIPT), MP_ROM_INT(FIBF_SCRIPT) },
+    { MP_ROM_QSTR(MP_QSTR_FIBF_HOLD), MP_ROM_INT(FIBF_HOLD) },
 };
 static MP_DEFINE_CONST_DICT(os_module_globals, os_module_globals_table);
 

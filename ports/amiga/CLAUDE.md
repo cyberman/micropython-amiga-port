@@ -193,6 +193,11 @@ using dos.library. The frozen `os.py` re-exports everything from `uos` and adds
 - `_kickstart()`: "version.revision" from SysBase (lib_Version + SoftVer).
 - `_chipmem()`: available chip RAM in bytes (AvailMem).
 - `_fastmem()`: available fast RAM in bytes (AvailMem).
+- `chmod(path, flags)`: set protection bits via SetProtection (raw AmigaOS flags).
+- `getprotect(path)`: read protection bits via Lock/Examine/fib_Protection.
+- Constants: `FIBF_DELETE`, `FIBF_EXECUTE`, `FIBF_WRITE`, `FIBF_READ`,
+  `FIBF_ARCHIVE`, `FIBF_PURE`, `FIBF_SCRIPT`, `FIBF_HOLD`.
+  Note: RWED bits (0-3) are INVERTED on AmigaOS (0=allowed, 1=denied).
 - `sep`: `"/"`.
 
 ### Python extensions (os.py)

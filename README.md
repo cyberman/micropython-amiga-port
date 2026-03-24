@@ -23,7 +23,8 @@ reviewed and validated by a human before being committed.
 - **Configurable heap**: `micropython -m 1024` for 1 MB heap (default 128 KB)
 - **File I/O**: full `open()`/`read()`/`write()`/`close()` via VFS_POSIX
 - **AmigaOS filesystem**: `os.listdir`, `os.getcwd`, `os.chdir`, `os.mkdir`,
-  `os.rmdir`, `os.remove`, `os.rename`, `os.stat`, `os.makedirs`, `os.walk`
+  `os.rmdir`, `os.remove`, `os.rename`, `os.stat`, `os.chmod`, `os.getprotect`,
+  `os.makedirs`, `os.walk`
 - **os.path**: join, split, basename, dirname, exists, isfile, isdir, abspath,
   normpath (with AmigaOS volume:path conventions)
 - **Modules**: re, json, math, struct, binascii, base64, time, datetime,
@@ -46,7 +47,7 @@ reviewed and validated by a human before being committed.
   installed at `/opt/amiga/`
 - GNU Make (`gmake`)
 - [AmiSSL SDK](https://github.com/jens-maus/amissl)
-  installed in '/opt/amiga/m68k-amigaos/ndk-include' (.h files) and in '/opt/amiga/m68k-amigaos/lib' for 'libamisslauto.a' and 'libamisslstubs.a'
+  installed in `/opt/amiga/m68k-amigaos/ndk-include` (.h files) and in `/opt/amiga/m68k-amigaos/lib` for `libamisslauto.a` and `libamisslstubs.a`
 
 ### Build
 
