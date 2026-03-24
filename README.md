@@ -45,6 +45,8 @@ reviewed and validated by a human before being committed.
 - [bebbo's m68k-amigaos-gcc toolchain](https://franke.ms/git/bebbo/amiga-gcc)
   installed at `/opt/amiga/`
 - GNU Make (`gmake`)
+- [AmiSSL SDK](https://github.com/jens-maus/amissl)
+  installed in '/opt/amiga/m68k-amigaos/ndk-include' (.h files) and in '/opt/amiga/m68k-amigaos/lib' for 'libamisslauto.a' and 'libamisslstubs.a'
 
 ### Build
 
