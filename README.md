@@ -89,7 +89,7 @@ True
 ## Known Limitations
 
 - `time.ticks_ms()` returns 0 (no high-resolution timer yet)
-- No Ctrl-C during script execution (only in REPL input)
+- Ctrl-C (KeyboardInterrupt) works during execution with ~20ms latency
 - `hashlib` only supports SHA256 (MD5/SHA1 require TLS library)
 - Sockets are always blocking (no non-blocking mode)
 - No multithreading

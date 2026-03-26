@@ -101,6 +101,7 @@ static void do_repl(void) {
         mp_parse_input_kind_t parse_input_kind = MP_PARSE_SINGLE_INPUT;
 
         if (ret == CHAR_CTRL_C) {
+            SetSignal(0, SIGBREAKF_CTRL_C);
             mp_hal_stdout_tx_str("\r\n");
             continue;
         } else if (ret == CHAR_CTRL_D) {
@@ -113,6 +114,7 @@ static void do_repl(void) {
             for (;;) {
                 char c = mp_hal_stdin_rx_chr();
                 if (c == CHAR_CTRL_C) {
+                    SetSignal(0, SIGBREAKF_CTRL_C);
                     mp_hal_stdout_tx_str("\r\n");
                     goto input_restart;
                 } else if (c == CHAR_CTRL_D) {
@@ -136,6 +138,7 @@ static void do_repl(void) {
                 vstr_add_byte(&line, '\n');
                 ret = readline(&line, "... ");
                 if (ret == CHAR_CTRL_C) {
+                    SetSignal(0, SIGBREAKF_CTRL_C);
                     mp_hal_stdout_tx_str("\r\n");
                     goto input_restart;
                 } else if (ret == CHAR_CTRL_D) {

@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include <proto/dos.h>
+#include <proto/exec.h>
 #include <dos/dos.h>
 
 // usleep() is provided by libnix but not declared under -std=c99
@@ -10,6 +11,7 @@ extern int usleep(unsigned long);
 
 #include "py/mpconfig.h"
 #include "py/mphal.h"
+#include "py/runtime.h"
 
 // CSI translation state: AmigaOS sends CSI (155) + letter for cursor keys,
 // but MicroPython readline expects ESC (27) + '[' (91) + letter.
@@ -57,11 +59,35 @@ void mp_hal_stdio_mode_orig(void) {
     SetMode(Input(), 0);  // MODE_CON
 }
 
-// Delay functions using usleep() from libnix
-void mp_hal_delay_ms(mp_uint_t ms) {
-    usleep(ms * 1000UL);
+// Check for Ctrl-C (SIGBREAKF_CTRL_C) and raise KeyboardInterrupt.
+// Called periodically from the VM bytecode loop via MICROPY_VM_HOOK_POLL.
+void mp_amiga_check_signals(void) {
+    ULONG signals = SetSignal(0, SIGBREAKF_CTRL_C);
+    if (signals & SIGBREAKF_CTRL_C) {
+        mp_sched_keyboard_interrupt();
+    }
 }
 
+// Interruptible delay using AmigaOS Delay() (1 tick = 20ms).
+// Sleeps in 100ms chunks, checking Ctrl-C between each.
+void mp_hal_delay_ms(mp_uint_t ms) {
+    while (ms > 0) {
+        mp_uint_t chunk = (ms > 100) ? 100 : ms;
+        LONG ticks = (chunk + 19) / 20;
+        if (ticks > 0) {
+            Delay(ticks);
+        }
+        ms -= chunk;
+        ULONG sig = SetSignal(0, SIGBREAKF_CTRL_C);
+        if (sig & SIGBREAKF_CTRL_C) {
+            mp_sched_keyboard_interrupt();
+            mp_handle_pending(true);
+            return;
+        }
+    }
+}
+
+// Microsecond delay (too short to need Ctrl-C support)
 void mp_hal_delay_us(mp_uint_t us) {
     usleep(us);
 }

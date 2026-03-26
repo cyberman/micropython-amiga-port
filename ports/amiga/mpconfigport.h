@@ -117,6 +117,15 @@
 #define MICROPY_PY_DEFLATE_COMPRESS     (1)
 #define MICROPY_GCREGS_SETJMP           (1)
 
+// Ctrl-C support: poll AmigaOS SIGBREAKF_CTRL_C every N bytecode operations.
+// This enables KeyboardInterrupt during Python execution (loops, calls).
+extern void mp_amiga_check_signals(void);
+#define MICROPY_VM_HOOK_COUNT   (64)
+#define MICROPY_VM_HOOK_INIT    static unsigned int vm_hook_div = MICROPY_VM_HOOK_COUNT;
+#define MICROPY_VM_HOOK_POLL    if (--vm_hook_div == 0) { vm_hook_div = MICROPY_VM_HOOK_COUNT; mp_amiga_check_signals(); }
+#define MICROPY_VM_HOOK_LOOP    MICROPY_VM_HOOK_POLL
+#define MICROPY_VM_HOOK_RETURN  MICROPY_VM_HOOK_POLL
+
 // quit() and exit() builtins
 extern const struct _mp_obj_fun_builtin_var_t mp_builtin_quit_obj;
 extern const struct _mp_obj_fun_builtin_var_t mp_builtin_exit_obj;

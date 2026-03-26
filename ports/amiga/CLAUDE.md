@@ -486,12 +486,13 @@ Console is restored to cooked mode in crash handlers (`nlr_jump_fail`,
 ## Known Limitations
 
 - `time.ticks_ms()` is a stub (no high-resolution clock yet)
-- `mp_hal_set_interrupt_char()` is a no-op (no Ctrl-C during script execution)
+- Ctrl-C (KeyboardInterrupt) works during execution via MICROPY_VM_HOOK_POLL
+  polling SetSignal(SIGBREAKF_CTRL_C) every 64 bytecodes. time.sleep() is
+  interruptible in 100ms chunks via Delay().
 - `hashlib` only supports SHA256 (MD5/SHA1 require TLS library)
 - `hashlib.sha256().digest()` can only be called once (MicroPython limitation)
 
 ## Future Work
 
 - High-resolution clock via timer.device or ReadEClock() for ticks_ms/ticks_us
-- Ctrl-C support during script execution via `SetSignal()` / `CheckSignal()`
 - Add more frozen modules (collections, etc.)
