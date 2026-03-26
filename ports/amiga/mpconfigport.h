@@ -81,7 +81,7 @@
 #define MICROPY_PERSISTENT_CODE_SAVE    (0)
 #define MICROPY_PERSISTENT_CODE_SAVE_FILE (0)
 #define MICROPY_PERSISTENT_CODE_SAVE_FUN (0)
-#define MICROPY_PERSISTENT_CODE_LOAD    (0)
+#define MICROPY_PERSISTENT_CODE_LOAD    (1)
 #define MICROPY_PY_MARSHAL              (0)
 
 // No alternative VFS implementations

@@ -93,6 +93,8 @@ full `open()`/`read()`/`write()`/`close()` support. The POSIX VFS is mounted at
 `/` during `vm_init()`. libnix provides all required POSIX symbols (open, close,
 read, write, stat, lseek, mkdir, rmdir, unlink, opendir, readdir, etc.).
 `mp_lexer_new_from_file()` and `mp_import_stat()` are provided by VFS.
+`MICROPY_PERSISTENT_CODE_LOAD=1` enables importing precompiled `.mpy` bytecode
+files (produced by `mpy-cross`), which load faster and use less RAM than `.py`.
 
 **sys.path enabled.** `MICROPY_PY_SYS_PATH=1` is required for frozen module imports.
 At startup, `mp_init()` creates `sys.path = ["", ".frozen"]`. The `.frozen/` virtual
