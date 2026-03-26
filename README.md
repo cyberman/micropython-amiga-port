@@ -26,7 +26,7 @@ The Amiga binary executable can be found in [micropython](ports/amiga/build/micr
 - **Inline execution**: `micropython -c "print('hello')"`
 - **Configurable heap**: `micropython -m 1024` for 1 MB heap (default 128 KB)
 - **File I/O**: full `open()`/`read()`/`write()`/`close()` via VFS_POSIX
-- **Precompiled modules**: import `.mpy` bytecode files (compiled with `mpy-cross`)
+- **Precompiled modules**: import and execute `.mpy` bytecode files (compiled with `mpy-cross`)
 - **AmigaOS filesystem**: `os.listdir`, `os.getcwd`, `os.chdir`, `os.mkdir`,
   `os.rmdir`, `os.remove`, `os.rename`, `os.stat`, `os.chmod`, `os.getprotect`,
   `os.makedirs`, `os.walk`

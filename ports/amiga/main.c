@@ -16,6 +16,7 @@
 #include "shared/runtime/gchelper.h"
 #include "shared/runtime/pyexec.h"
 #include "shared/readline/readline.h"
+#include "py/persistentcode.h"
 #include "extmod/vfs.h"
 #include "extmod/vfs_posix.h"
 #include "genhdr/mpversion.h"
@@ -198,7 +199,7 @@ static int do_str(const char *str) {
     }
 }
 
-// Execute a .py script file. Returns 0 on success, non-zero on error.
+// Execute a script file (.py or .mpy). Returns 0 on success, non-zero on error.
 static int do_file(const char *filename) {
     FILE *f = fopen(filename, "r");
     if (f == NULL) {
@@ -206,6 +207,30 @@ static int do_file(const char *filename) {
         return 1;
     }
     fclose(f);
+
+    // Check for .mpy extension
+    size_t len = strlen(filename);
+    if (len >= 4 && strcmp(filename + len - 4, ".mpy") == 0) {
+        // Load pre-compiled bytecode
+        nlr_buf_t nlr;
+        if (nlr_push(&nlr) == 0) {
+            qstr qfilename = qstr_from_str(filename);
+            mp_compiled_module_t cm;
+            cm.context = m_new_obj(mp_module_context_t);
+            cm.context->module.globals = mp_globals_get();
+            mp_raw_code_load_file(qfilename, &cm);
+            mp_obj_t module_fun = mp_make_function_from_proto_fun(
+                cm.rc, cm.context, NULL);
+            mp_call_function_0(module_fun);
+            nlr_pop();
+            return 0;
+        } else {
+            mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);
+            return 1;
+        }
+    }
+
+    // Regular .py file — use pyexec_file
     int ret = pyexec_file(filename);
     return ret == 0 ? 1 : 0; // pyexec_file returns 1 on success
 }

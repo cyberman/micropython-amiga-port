@@ -165,6 +165,7 @@ micropython script.py arg1 arg2      # execute with sys.argv = ['script.py', 'ar
 micropython -c "print('hello')"      # execute inline code
 micropython -m 1024 script.py        # execute with 1024 KB heap
 micropython -m 512                   # launch REPL with 512 KB heap
+micropython script.mpy               # execute precompiled bytecode
 ```
 
 The `-m <size_kb>` option must come first. Default heap is 128 KB.
