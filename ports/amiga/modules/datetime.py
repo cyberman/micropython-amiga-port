@@ -297,6 +297,58 @@ def _d2iso(o):  # date -> ISO
     return "%04d-%02d-%02d" % _o2ymd(o)
 
 
+def _strftime(fmt, year, month, day, hour=0, minute=0, second=0, microsecond=0):
+    """Format date/time according to format string (shared by date and datetime)."""
+    _days_in_month = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    _month_abbr = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    _month_names = ["", "January", "February", "March", "April", "May", "June",
+                    "July", "August", "September", "October", "November", "December"]
+    _day_abbr = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    _day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    # Day of year
+    doy = day
+    for i in range(1, month):
+        doy += _days_in_month[i]
+    if month > 2 and (year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)):
+        doy += 1
+    # Day of week (Tomohiko Sakamoto): 0=Monday
+    _t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4]
+    _y = year
+    if month < 3:
+        _y -= 1
+    dow = (_y + _y // 4 - _y // 100 + _y // 400 + _t[month - 1] + day) % 7
+    result = []
+    i = 0
+    while i < len(fmt):
+        if fmt[i] == '%' and i + 1 < len(fmt):
+            c = fmt[i + 1]
+            if c == 'Y': result.append("%04d" % year)
+            elif c == 'y': result.append("%02d" % (year % 100))
+            elif c == 'm': result.append("%02d" % month)
+            elif c == 'd': result.append("%02d" % day)
+            elif c == 'H': result.append("%02d" % hour)
+            elif c == 'M': result.append("%02d" % minute)
+            elif c == 'S': result.append("%02d" % second)
+            elif c == 'f': result.append("%06d" % microsecond)
+            elif c == 'j': result.append("%03d" % doy)
+            elif c == 'A': result.append(_day_names[dow])
+            elif c == 'a': result.append(_day_abbr[dow])
+            elif c == 'B': result.append(_month_names[month])
+            elif c == 'b': result.append(_month_abbr[month])
+            elif c == 'p': result.append("AM" if hour < 12 else "PM")
+            elif c == 'I':
+                h = hour % 12
+                result.append("%02d" % (h if h else 12))
+            elif c == '%': result.append('%')
+            else: result.append('%'); result.append(c)
+            i += 2
+        else:
+            result.append(fmt[i])
+            i += 1
+    return "".join(result)
+
+
 class date:
     def __init__(self, year, month, day):
         self._ord = _date(year, month, day)
@@ -382,6 +434,9 @@ class date:
 
     def isoformat(self):
         return _d2iso(self._ord)
+
+    def strftime(self, fmt):
+        return _strftime(fmt, self.year, self.month, self.day)
 
     def __repr__(self):
         y, m, d = self.tuple()
@@ -883,6 +938,10 @@ class datetime:
 
     def isoformat(self, sep="T", timespec="auto"):
         return _d2iso(self._d) + sep + _t2iso(self._t, timespec, self, self._tz)
+
+    def strftime(self, fmt):
+        return _strftime(fmt, self.year, self.month, self.day,
+                         self.hour, self.minute, self.second, self.microsecond)
 
     def __repr__(self):
         Y, M, D, h, m, s, us, tz, fold = self.tuple()

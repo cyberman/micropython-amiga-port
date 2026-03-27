@@ -50,7 +50,7 @@ Compiler flags:
 | `modtime.c` | Time implementation for AmigaOS (gmtime/localtime/time via libnix) |
 | `qstrdefsport.h` | Port-specific qstrings (empty) |
 | `manifest.py` | Frozen Python module declarations (base64, datetime, _ospath, os) |
-| `modules/datetime.py` | Patched local copy of datetime (fixed __repr__) |
+| `modules/datetime.py` | Patched local copy of datetime (fixed __repr__, added strftime) |
 | `modules/_ospath.py` | os.path implementation for AmigaOS path conventions |
 | `modules/os.py` | Frozen os module: re-exports uos, adds makedirs() and walk(), imports _ospath as path |
 | `modules/platform.py` | Frozen platform module: CPU/FPU/chipset/Kickstart detection via uos C helpers |
@@ -369,6 +369,8 @@ Implemented via `modtime.c` (included by extmod/modtime.c via
 - `time.gmtime([secs])` / `time.localtime([secs])`: 8-element tuple
 - `time.mktime(tuple)`: inverse conversion
 - `time.sleep(secs)` / `time.sleep_ms(ms)` / `time.sleep_us(us)`: `usleep()` libnix
+- `time.gmtime([secs])` / `time.localtime([secs])`: 8-element time tuple
+- `time.mktime(tuple)`: inverse conversion
 - `time.ticks_ms()` / `time.ticks_us()` / `time.ticks_cpu()`: stubs (return 0)
 
 Epoch is 1970 (`MICROPY_EPOCH_IS_1970=1`), matching libnix `time()`.
@@ -441,7 +443,7 @@ Console is restored to cooked mode in crash handlers (`nlr_jump_fail`,
 ### Frozen (Python modules embedded in binary)
 
 - `base64`: base64, base32, base16 encoding/decoding
-- `datetime`: date, time, datetime, timedelta (patched local copy)
+- `datetime`: date, time, datetime, timedelta (patched: fixed __repr__, added strftime)
 - `_ospath`: os.path for AmigaOS
 - `os`: os module wrapper (makedirs, walk, path)
 - `platform`: system, machine, processor, version, fpu, chipset, amiga_info
