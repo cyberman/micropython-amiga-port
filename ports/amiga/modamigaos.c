@@ -225,6 +225,44 @@ static mp_obj_t mod_os_rename(mp_obj_t old_in, mp_obj_t new_in) {
 static MP_DEFINE_CONST_FUN_OBJ_2(mod_os_rename_obj, mod_os_rename);
 
 // os.stat(path) — return a 10-element stat_result tuple.
+// Convert Unix permission mode (0o755, 0o666, etc.) to AmigaOS protection bits.
+// Owner RWED bits are INVERTED on AmigaOS (set = denied).
+// Group/Other bits are NOT inverted (set = allowed).
+static ULONG unix_mode_to_amiga(mp_int_t mode) {
+    ULONG prot = 0;
+    // Owner bits (inverted: set bit = DENIED)
+    if (!(mode & 0400)) prot |= FIBF_READ;
+    if (!(mode & 0200)) { prot |= FIBF_WRITE; prot |= FIBF_DELETE; }
+    if (!(mode & 0100)) prot |= FIBF_EXECUTE;
+    // Group bits (not inverted: set bit = ALLOWED)
+    if (mode & 0040) prot |= FIBF_GRP_READ;
+    if (mode & 0020) prot |= FIBF_GRP_WRITE;
+    if (mode & 0010) prot |= FIBF_GRP_EXECUTE;
+    // Other bits (not inverted: set bit = ALLOWED)
+    if (mode & 0004) prot |= FIBF_OTR_READ;
+    if (mode & 0002) prot |= FIBF_OTR_WRITE;
+    if (mode & 0001) prot |= FIBF_OTR_EXECUTE;
+    return prot;
+}
+
+// Convert AmigaOS protection bits to Unix permission mode.
+static mp_int_t amiga_to_unix_mode(ULONG prot) {
+    mp_int_t mode = 0;
+    // Owner bits (inverted)
+    if (!(prot & FIBF_READ))    mode |= 0400;
+    if (!(prot & FIBF_WRITE))   mode |= 0200;
+    if (!(prot & FIBF_EXECUTE)) mode |= 0100;
+    // Group bits (not inverted)
+    if (prot & FIBF_GRP_READ)    mode |= 0040;
+    if (prot & FIBF_GRP_WRITE)   mode |= 0020;
+    if (prot & FIBF_GRP_EXECUTE) mode |= 0010;
+    // Other bits (not inverted)
+    if (prot & FIBF_OTR_READ)    mode |= 0004;
+    if (prot & FIBF_OTR_WRITE)   mode |= 0002;
+    if (prot & FIBF_OTR_EXECUTE) mode |= 0001;
+    return mode;
+}
+
 static mp_obj_t mod_os_stat(mp_obj_t path_in) {
     const char *path = mp_obj_str_get_str(path_in);
     BPTR lock = Lock((CONST_STRPTR)path, SHARED_LOCK);
@@ -241,8 +279,9 @@ static mp_obj_t mod_os_stat(mp_obj_t path_in) {
         UnLock(lock);
         mp_raise_OSError(MP_EIO);
     }
-    // st_mode: directory = 0040755, file = 0100644
-    mp_int_t st_mode = (fib->fib_DirEntryType > 0) ? 0040755 : 0100644;
+    // st_mode: file type + real permissions from fib_Protection
+    mp_int_t st_type = (fib->fib_DirEntryType > 0) ? 0040000 : 0100000;
+    mp_int_t st_mode = st_type | amiga_to_unix_mode(fib->fib_Protection);
     mp_int_t st_size = fib->fib_Size;
     mp_int_t st_time = datestamp_to_unix(&fib->fib_Date);
     FreeDosObject(DOS_FIB, fib);
@@ -263,12 +302,13 @@ static mp_obj_t mod_os_stat(mp_obj_t path_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mod_os_stat_obj, mod_os_stat);
 
-// os.chmod(path, flags) — set file protection bits via SetProtection().
-// RWED bits (0-3) are INVERTED on AmigaOS: 0 = allowed, 1 = denied.
-static mp_obj_t mod_os_chmod(mp_obj_t path_obj, mp_obj_t flags_obj) {
+// os.chmod(path, mode) — set file permissions using Unix mode (0o755, 0o666, etc.).
+// Converts Unix permission bits to AmigaOS protection bits automatically.
+static mp_obj_t mod_os_chmod(mp_obj_t path_obj, mp_obj_t mode_obj) {
     const char *path = mp_obj_str_get_str(path_obj);
-    LONG flags = mp_obj_get_int(flags_obj);
-    if (!SetProtection((CONST_STRPTR)path, flags)) {
+    mp_int_t mode = mp_obj_get_int(mode_obj);
+    ULONG prot = unix_mode_to_amiga(mode);
+    if (!SetProtection((CONST_STRPTR)path, prot)) {
         mp_raise_OSError(MP_EIO);
     }
     return mp_const_none;

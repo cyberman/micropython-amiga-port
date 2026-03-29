@@ -188,6 +188,7 @@ using dos.library. The frozen `os.py` re-exports everything from `uos` and adds
 - `remove(path)`: remove file (verifies is NOT dir, then DeleteFile).
 - `rename(old, new)`: rename via dos.library Rename().
 - `stat(path)`: 10-element tuple (mode, ino, dev, nlink, uid, gid, size, atime, mtime, ctime).
+  st_mode reflects real permissions from fib_Protection (converted to Unix mode).
   DateStamp converted to Unix epoch (+252460800s offset).
 - `system(cmd)`: execute shell command via libnix system().
 - `_stat_type(path)`: 0=not found, 1=dir, 2=file (used by _ospath).
@@ -200,7 +201,8 @@ using dos.library. The frozen `os.py` re-exports everything from `uos` and adds
 - `getenv(key[, default])`: read environment variable via GetVar (GVF_GLOBAL_ONLY).
 - `putenv(key, value)`: set environment variable via SetVar.
 - `unsetenv(key)`: delete environment variable via DeleteVar.
-- `chmod(path, flags)`: set protection bits via SetProtection (raw AmigaOS flags).
+- `chmod(path, mode)`: set permissions using Unix mode (0o755, 0o666, etc.),
+  automatically converts to AmigaOS protection bits (inverted RWED + group/other).
 - `getprotect(path)`: read protection bits via Lock/Examine/fib_Protection.
 - Constants: `FIBF_DELETE`, `FIBF_EXECUTE`, `FIBF_WRITE`, `FIBF_READ`,
   `FIBF_ARCHIVE`, `FIBF_PURE`, `FIBF_SCRIPT`, `FIBF_HOLD`.
