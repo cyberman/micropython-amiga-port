@@ -413,7 +413,8 @@ Console is restored to cooked mode in crash handlers (`nlr_jump_fail`,
 
 - `builtins`: basic Python functions (print, len, range, etc.)
 - `gc`: garbage collector control
-- `sys`: system info, `sys.exit()`, `sys.platform`, `sys.path`, `sys.argv`
+- `sys`: system info, `sys.exit()`, `sys.platform`, `sys.path`, `sys.argv`,
+  `sys.stdin`, `sys.stdout`, `sys.stderr` (VFS_POSIX textio streams)
 - `struct`: binary data pack/unpack
 - `math`: math functions (single-precision float)
 - `micropython`: MicroPython introspection

@@ -69,8 +69,8 @@
 #define MICROPY_PY_SSL                  (0)
 
 // EVERYTHING enables sys std files but we don't provide stream objects
-#define MICROPY_PY_SYS_STDFILES         (0)
-#define MICROPY_PY_SYS_STDIO_BUFFER     (0)
+#define MICROPY_PY_SYS_STDFILES         (1)
+#define MICROPY_PY_SYS_STDIO_BUFFER     (1)
 
 // No atexit / executable / dupterm
 #define MICROPY_PY_SYS_ATEXIT           (0)
