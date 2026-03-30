@@ -4,7 +4,6 @@
 
 #include <string.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <sys/socket.h>
 
 #include "py/runtime.h"
@@ -238,16 +237,16 @@ static MP_DEFINE_CONST_FUN_OBJ_1(ssl_socket_close_obj, ssl_socket_close);
 // SSL_shutdown is skipped (it does network I/O via BIO send, unsafe if
 // the underlying socket fd was already closed by its own __del__).
 // mp_load_method/mp_call are skipped (unsafe during GC sweep).
+// The fd is NOT closed here — it belongs to the underlying Python socket
+// object, which has its own __del__ to close it. Closing it here would
+// cause a double-close if the socket's __del__ already ran.
 static mp_obj_t ssl_socket___del__(mp_obj_t self_in) {
     mp_obj_ssl_socket_t *self = MP_OBJ_TO_PTR(self_in);
     if (self->ssl) {
         SSL_free(self->ssl);  // frees SSL + BIO memory, no I/O
         self->ssl = NULL;
     }
-    if (self->fd >= 0) {
-        close(self->fd);      // close fd directly, no Python calls
-        self->fd = -1;
-    }
+    self->fd = -1;
     self->sock = mp_const_none;
     return mp_const_none;
 }
