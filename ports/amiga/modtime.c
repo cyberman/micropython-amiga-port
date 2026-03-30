@@ -7,14 +7,19 @@
 
 // Get timezone offset in seconds (local = utc + offset).
 // Uses AmigaOS locale.library: loc_GMTOffset is in minutes, negative = east.
+// Cached on first call to avoid opening/closing locale.library every time.
 static int32_t amiga_tz_offset_s(void) {
-    struct Locale *locale = OpenLocale(NULL);
-    if (locale) {
-        int32_t offset = -(locale->loc_GMTOffset) * 60;
-        CloseLocale(locale);
-        return offset;
+    static int32_t cached_offset = 0;
+    static int cached = 0;
+    if (!cached) {
+        struct Locale *locale = OpenLocale(NULL);
+        if (locale) {
+            cached_offset = -(locale->loc_GMTOffset) * 60;
+            CloseLocale(locale);
+        }
+        cached = 1;
     }
-    return 0;
+    return cached_offset;
 }
 
 // Get the local time (UTC + timezone offset).

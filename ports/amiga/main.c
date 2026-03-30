@@ -246,7 +246,7 @@ static void vm_init(int argc, char **argv) {
         heap = (char *)AllocMem(heap_size, MEMF_ANY | MEMF_CLEAR);
         if (heap == NULL) {
             printf("Error: cannot allocate %luKB heap\n", heap_size / 1024);
-            exit(1);
+            _exit(1);
         }
     }
     gc_init(heap, heap + heap_size);
