@@ -373,6 +373,8 @@ Implemented via `modtime.c` (included by extmod/modtime.c via
 - `time.sleep(secs)` / `time.sleep_ms(ms)` / `time.sleep_us(us)`: `usleep()` libnix
 - `time.gmtime([secs])` / `time.localtime([secs])`: 8-element time tuple
 - `time.mktime(tuple)`: inverse conversion
+- `time.strftime(fmt[, t])`: format time tuple as string (%Y %m %d %H %M %S etc.)
+  Implemented in C via MICROPY_PY_TIME_EXTRA_GLOBALS (not a frozen module).
 - `time.ticks_ms()` / `time.ticks_us()` / `time.ticks_cpu()`: stubs (return 0)
 
 Epoch is 1970 (`MICROPY_EPOCH_IS_1970=1`), matching libnix `time()`.

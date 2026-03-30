@@ -113,6 +113,8 @@
 #define MICROPY_LONGINT_IMPL            (MICROPY_LONGINT_IMPL_MPZ)
 #define MICROPY_FLOAT_IMPL              (MICROPY_FLOAT_IMPL_FLOAT)
 #define MICROPY_PY_TIME_INCLUDEFILE     "ports/amiga/modtime.c"
+#define MICROPY_PY_TIME_EXTRA_GLOBALS \
+    { MP_ROM_QSTR(MP_QSTR_strftime), MP_ROM_PTR(&mp_time_strftime_obj) },
 #define MICROPY_PY_TIME_GMTIME_LOCALTIME_MKTIME (1)
 #define MICROPY_PY_TIME_TIME_TIME_NS    (1)
 #define MICROPY_EPOCH_IS_1970           (1)
