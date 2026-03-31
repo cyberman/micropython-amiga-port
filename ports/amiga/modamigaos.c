@@ -27,6 +27,14 @@ extern struct GfxBase *GfxBase;
 #define GFXB_HR_AGNUS  0
 #define GFXB_HR_DENISE 1
 
+// Create a Python str from AmigaOS Latin-1 bytes, bypassing UTF-8 validation.
+// AmigaOS uses Latin-1 for filenames and the console also expects Latin-1,
+// so we keep the raw bytes as-is for correct display on Amiga terminals.
+// We call mp_obj_new_str_copy directly to skip the UTF-8 check in mp_obj_new_str.
+static mp_obj_t mp_obj_new_str_from_latin1(const char *s, size_t len) {
+    return mp_obj_new_str_copy(&mp_type_str, (const byte *)s, len);
+}
+
 // os.listdir([path]) — list directory contents using Examine/ExNext.
 static mp_obj_t mod_os_listdir(size_t n_args, const mp_obj_t *args) {
     const char *path = (n_args == 0) ? "" : mp_obj_str_get_str(args[0]);
@@ -53,7 +61,7 @@ static mp_obj_t mod_os_listdir(size_t n_args, const mp_obj_t *args) {
         }
         while (ExNext(lock, fib)) {
             const char *name = (const char *)fib->fib_FileName;
-            mp_obj_list_append(list, mp_obj_new_str(name, strlen(name)));
+            mp_obj_list_append(list, mp_obj_new_str_from_latin1(name, strlen(name)));
         }
     }
 
@@ -73,7 +81,7 @@ static mp_obj_t mod_os_getcwd(void) {
     BPTR lock = CurrentDir(0);
     CurrentDir(lock); // restore
     if (lock && NameFromLock(lock, (STRPTR)buf, sizeof(buf))) {
-        return mp_obj_new_str(buf, strlen(buf));
+        return mp_obj_new_str_from_latin1(buf, strlen(buf));
     }
     // lock==0 means boot volume root
     if (lock == 0) {
