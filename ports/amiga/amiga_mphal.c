@@ -45,9 +45,85 @@ int mp_hal_stdin_rx_chr(void) {
     return c;
 }
 
-// Write a string to stdout using dos.library Write() for raw mode compatibility.
+// Write a string to stdout, converting UTF-8 to Latin-1 for the AmigaOS terminal.
+// Fast path: pure ASCII is written directly without copying.
 mp_uint_t mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
-    return (mp_uint_t)Write(Output(), (APTR)str, len);
+    // Fast path: check for non-ASCII bytes
+    int needs_conversion = 0;
+    for (mp_uint_t i = 0; i < len; i++) {
+        if ((unsigned char)str[i] > 0x7F) {
+            needs_conversion = 1;
+            break;
+        }
+    }
+    if (!needs_conversion) {
+        return (mp_uint_t)Write(Output(), (APTR)str, len);
+    }
+    // Convert UTF-8 to Latin-1, flushing in chunks
+    char buf[256];
+    mp_uint_t total = 0;
+    mp_uint_t j = 0;
+    for (mp_uint_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)str[i];
+        if (c < 0x80) {
+            buf[j++] = c;
+        } else if ((c & 0xE0) == 0xC0 && i + 1 < len
+                   && ((unsigned char)str[i + 1] & 0xC0) == 0x80) {
+            unsigned int cp = ((c & 0x1F) << 6) | ((unsigned char)str[i + 1] & 0x3F);
+            buf[j++] = (cp <= 0xFF) ? (char)cp : '?';
+            i++;
+        } else if ((c & 0xF0) == 0xE0 && i + 2 < len) {
+            buf[j++] = '?';
+            i += 2;
+        } else if ((c & 0xF8) == 0xF0 && i + 3 < len) {
+            buf[j++] = '?';
+            i += 3;
+        } else {
+            buf[j++] = c;
+        }
+        if (j >= sizeof(buf) - 4) {
+            total += (mp_uint_t)Write(Output(), (APTR)buf, j);
+            j = 0;
+        }
+    }
+    if (j > 0) {
+        total += (mp_uint_t)Write(Output(), (APTR)buf, j);
+    }
+    return total;
+}
+
+// Convert a UTF-8 C string to Latin-1 for passing to AmigaOS.
+// Returns s directly if pure ASCII (fast path, no copy).
+const char *amiga_utf8_to_latin1(const char *s, char *buf, size_t bufsize) {
+    const char *p = s;
+    while (*p) {
+        if ((unsigned char)*p > 0x7F) goto convert;
+        p++;
+    }
+    return s;
+convert:;
+    size_t j = 0;
+    for (size_t i = 0; s[i] && j < bufsize - 1; i++) {
+        unsigned char c = (unsigned char)s[i];
+        if (c < 0x80) {
+            buf[j++] = c;
+        } else if ((c & 0xE0) == 0xC0 && s[i + 1]
+                   && ((unsigned char)s[i + 1] & 0xC0) == 0x80) {
+            unsigned int cp = ((c & 0x1F) << 6) | ((unsigned char)s[i + 1] & 0x3F);
+            buf[j++] = (cp <= 0xFF) ? (char)cp : '?';
+            i++;
+        } else if ((c & 0xF0) == 0xE0 && s[i + 1] && s[i + 2]) {
+            buf[j++] = '?';
+            i += 2;
+        } else if ((c & 0xF8) == 0xF0 && s[i + 1] && s[i + 2] && s[i + 3]) {
+            buf[j++] = '?';
+            i += 3;
+        } else {
+            buf[j++] = c;
+        }
+    }
+    buf[j] = '\0';
+    return buf;
 }
 
 // Switch console to raw mode (character-by-character, no buffering)

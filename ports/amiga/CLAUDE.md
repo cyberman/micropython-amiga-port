@@ -61,6 +61,17 @@ Compiler flags:
 
 ### Architecture Decisions
 
+**Latin-1 ↔ UTF-8 encoding.** AmigaOS uses Latin-1 (ISO-8859-1) for filenames
+and terminal output. MicroPython stores strings as UTF-8 internally. Bidirectional
+conversion is implemented:
+- `mp_obj_new_str_from_latin1()` (modamigaos.c): Latin-1 → UTF-8 for listdir/getcwd
+- `get_latin1_path()` / `amiga_utf8_to_latin1()` (amiga_mphal.c): UTF-8 → Latin-1
+  for all path-taking functions (Lock, CreateDir, SetProtection, etc.)
+- `mp_hal_stdout_tx_strn()`: UTF-8 → Latin-1 for terminal output (print)
+- `MICROPY_PY_OS_DUPTERM=1`: redirects VFS POSIX stdout/stderr through mphal
+- `MICROPY_VFS_POSIX_CONVERT_PATH`: hook in vfs_posix.c/vfs_posix_file.c for
+  open() and import path resolution
+
 **No POSIX.** AmigaOS is not POSIX. All POSIX code from the unix port was removed:
 no fork, no pthreads, no mmap, no POSIX signals, no termios, no select/poll.
 

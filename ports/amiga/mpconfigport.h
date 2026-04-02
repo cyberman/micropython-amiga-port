@@ -72,10 +72,12 @@
 #define MICROPY_PY_SYS_STDFILES         (1)
 #define MICROPY_PY_SYS_STDIO_BUFFER     (1)
 
-// No atexit / executable / dupterm
+// No atexit / executable
 #define MICROPY_PY_SYS_ATEXIT           (0)
 #define MICROPY_PY_SYS_EXECUTABLE       (0)
-#define MICROPY_PY_OS_DUPTERM           (0)
+// DUPTERM redirects VFS POSIX stdout/stderr writes through mp_hal_stdout_tx_strn(),
+// which does UTF-8 → Latin-1 conversion for the AmigaOS terminal.
+#define MICROPY_PY_OS_DUPTERM           (1)
 
 // No .mpy saving or marshal
 #define MICROPY_PERSISTENT_CODE_SAVE    (0)
@@ -120,6 +122,10 @@
 #define MICROPY_EPOCH_IS_1970           (1)
 #define MICROPY_HAL_HAS_TIMEZONE        (1)
 #define MICROPY_PY_DEFLATE_COMPRESS     (1)
+
+// VFS POSIX filename conversion: UTF-8 → Latin-1 for AmigaOS
+extern const char *amiga_utf8_to_latin1(const char *s, char *buf, size_t bufsize);
+#define MICROPY_VFS_POSIX_CONVERT_PATH(path, buf, sz) amiga_utf8_to_latin1(path, buf, sz)
 #define MICROPY_GCREGS_SETJMP           (1)
 
 // Ctrl-C support: poll AmigaOS SIGBREAKF_CTRL_C every N bytecode operations.

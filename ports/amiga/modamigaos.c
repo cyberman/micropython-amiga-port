@@ -2,6 +2,10 @@
 // The frozen 'os' module (os.py) re-exports everything from uos
 // and adds makedirs() and walk().
 // Uses dos.library for filesystem operations.
+// Latin-1 ↔ UTF-8 conversion: AmigaOS uses Latin-1 for filenames,
+// MicroPython stores strings as UTF-8. All path-taking functions convert
+// UTF-8 → Latin-1 before calling AmigaOS, and listdir/getcwd convert
+// Latin-1 → UTF-8 when returning filenames to Python.
 
 #include <stdlib.h>
 #include <string.h>
@@ -27,17 +31,47 @@ extern struct GfxBase *GfxBase;
 #define GFXB_HR_AGNUS  0
 #define GFXB_HR_DENISE 1
 
-// Create a Python str from AmigaOS Latin-1 bytes, bypassing UTF-8 validation.
-// AmigaOS uses Latin-1 for filenames and the console also expects Latin-1,
-// so we keep the raw bytes as-is for correct display on Amiga terminals.
-// We call mp_obj_new_str_copy directly to skip the UTF-8 check in mp_obj_new_str.
+// Create a MicroPython str from AmigaOS Latin-1 bytes with proper UTF-8 encoding.
+// Latin-1 codepoints 0x80-0xFF become 2-byte UTF-8 sequences.
 static mp_obj_t mp_obj_new_str_from_latin1(const char *s, size_t len) {
-    return mp_obj_new_str_copy(&mp_type_str, (const byte *)s, len);
+    // Fast path: pure ASCII (common case)
+    int needs_conversion = 0;
+    for (size_t i = 0; i < len; i++) {
+        if ((unsigned char)s[i] > 0x7F) {
+            needs_conversion = 1;
+            break;
+        }
+    }
+    if (!needs_conversion) {
+        return mp_obj_new_str(s, len);
+    }
+    // Worst case: every byte becomes 2 bytes (AmigaOS paths max ~256 chars)
+    char utf8_buf[512];
+    size_t j = 0;
+    for (size_t i = 0; i < len && j < sizeof(utf8_buf) - 2; i++) {
+        unsigned char c = (unsigned char)s[i];
+        if (c < 0x80) {
+            utf8_buf[j++] = c;
+        } else {
+            utf8_buf[j++] = (char)(0xC0 | (c >> 6));
+            utf8_buf[j++] = (char)(0x80 | (c & 0x3F));
+        }
+    }
+    return mp_obj_new_str(utf8_buf, j);
+}
+
+// Extract a Latin-1 C string from a MicroPython str for passing to AmigaOS.
+// Uses the shared amiga_utf8_to_latin1() from amiga_mphal.c.
+extern const char *amiga_utf8_to_latin1(const char *s, char *buf, size_t bufsize);
+static const char *get_latin1_path(mp_obj_t str_obj, char *buf, size_t bufsize) {
+    const char *s = mp_obj_str_get_str(str_obj);
+    return amiga_utf8_to_latin1(s, buf, bufsize);
 }
 
 // os.listdir([path]) — list directory contents using Examine/ExNext.
 static mp_obj_t mod_os_listdir(size_t n_args, const mp_obj_t *args) {
-    const char *path = (n_args == 0) ? "" : mp_obj_str_get_str(args[0]);
+    char path_buf[256];
+    const char *path = (n_args == 0) ? "" : get_latin1_path(args[0], path_buf, sizeof(path_buf));
 
     BPTR lock = Lock((CONST_STRPTR)path, SHARED_LOCK);
     if (lock == 0) {
@@ -96,7 +130,8 @@ static MP_DEFINE_CONST_FUN_OBJ_0(mod_os_getcwd_obj, mod_os_getcwd);
 extern BPTR original_dir;
 
 static mp_obj_t mod_os_chdir(mp_obj_t path_in) {
-    const char *path = mp_obj_str_get_str(path_in);
+    char path_buf[256];
+    const char *path = get_latin1_path(path_in, path_buf, sizeof(path_buf));
     BPTR new_lock = Lock((CONST_STRPTR)path, SHARED_LOCK);
     if (new_lock == 0) {
         mp_raise_OSError(MP_ENOENT);
@@ -119,7 +154,8 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mod_os_system_obj, mod_os_system);
 
 // os._stat_type(path) — return 1 for dir, 2 for file, 0 if not found.
 static mp_obj_t mod_os_stat_type(mp_obj_t path_in) {
-    const char *path = mp_obj_str_get_str(path_in);
+    char path_buf[256];
+    const char *path = get_latin1_path(path_in, path_buf, sizeof(path_buf));
     BPTR lock = Lock((CONST_STRPTR)path, SHARED_LOCK);
     if (lock == 0) {
         return MP_OBJ_NEW_SMALL_INT(0);
@@ -153,7 +189,8 @@ static mp_int_t datestamp_to_unix(const struct DateStamp *ds) {
 
 // os.mkdir(path) — create a directory.
 static mp_obj_t mod_os_mkdir(mp_obj_t path_in) {
-    const char *path = mp_obj_str_get_str(path_in);
+    char path_buf[256];
+    const char *path = get_latin1_path(path_in, path_buf, sizeof(path_buf));
     BPTR lock = CreateDir((CONST_STRPTR)path);
     if (lock == 0) {
         mp_raise_OSError(MP_EIO);
@@ -165,7 +202,8 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mod_os_mkdir_obj, mod_os_mkdir);
 
 // os.rmdir(path) — remove an empty directory.
 static mp_obj_t mod_os_rmdir(mp_obj_t path_in) {
-    const char *path = mp_obj_str_get_str(path_in);
+    char path_buf[256];
+    const char *path = get_latin1_path(path_in, path_buf, sizeof(path_buf));
     // Verify it is a directory
     BPTR lock = Lock((CONST_STRPTR)path, SHARED_LOCK);
     if (lock == 0) {
@@ -194,7 +232,8 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mod_os_rmdir_obj, mod_os_rmdir);
 
 // os.remove(path) — remove a file (not a directory).
 static mp_obj_t mod_os_remove(mp_obj_t path_in) {
-    const char *path = mp_obj_str_get_str(path_in);
+    char path_buf[256];
+    const char *path = get_latin1_path(path_in, path_buf, sizeof(path_buf));
     // Verify it is NOT a directory
     BPTR lock = Lock((CONST_STRPTR)path, SHARED_LOCK);
     if (lock == 0) {
@@ -223,8 +262,9 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mod_os_remove_obj, mod_os_remove);
 
 // os.rename(old, new) — rename a file or directory.
 static mp_obj_t mod_os_rename(mp_obj_t old_in, mp_obj_t new_in) {
-    const char *old_path = mp_obj_str_get_str(old_in);
-    const char *new_path = mp_obj_str_get_str(new_in);
+    char old_buf[256], new_buf[256];
+    const char *old_path = get_latin1_path(old_in, old_buf, sizeof(old_buf));
+    const char *new_path = get_latin1_path(new_in, new_buf, sizeof(new_buf));
     if (!Rename((CONST_STRPTR)old_path, (CONST_STRPTR)new_path)) {
         mp_raise_OSError(MP_EIO);
     }
@@ -272,7 +312,8 @@ static mp_int_t amiga_to_unix_mode(ULONG prot) {
 }
 
 static mp_obj_t mod_os_stat(mp_obj_t path_in) {
-    const char *path = mp_obj_str_get_str(path_in);
+    char path_buf[256];
+    const char *path = get_latin1_path(path_in, path_buf, sizeof(path_buf));
     BPTR lock = Lock((CONST_STRPTR)path, SHARED_LOCK);
     if (lock == 0) {
         mp_raise_OSError(MP_ENOENT);
@@ -313,7 +354,8 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mod_os_stat_obj, mod_os_stat);
 // os.chmod(path, mode) — set file permissions using Unix mode (0o755, 0o666, etc.).
 // Converts Unix permission bits to AmigaOS protection bits automatically.
 static mp_obj_t mod_os_chmod(mp_obj_t path_obj, mp_obj_t mode_obj) {
-    const char *path = mp_obj_str_get_str(path_obj);
+    char path_buf[256];
+    const char *path = get_latin1_path(path_obj, path_buf, sizeof(path_buf));
     mp_int_t mode = mp_obj_get_int(mode_obj);
     ULONG prot = unix_mode_to_amiga(mode);
     if (!SetProtection((CONST_STRPTR)path, prot)) {
@@ -325,7 +367,8 @@ static MP_DEFINE_CONST_FUN_OBJ_2(mod_os_chmod_obj, mod_os_chmod);
 
 // os.getprotect(path) — read file protection bits via Lock()/Examine().
 static mp_obj_t mod_os_getprotect(mp_obj_t path_obj) {
-    const char *path = mp_obj_str_get_str(path_obj);
+    char path_buf[256];
+    const char *path = get_latin1_path(path_obj, path_buf, sizeof(path_buf));
     BPTR lock = Lock((CONST_STRPTR)path, SHARED_LOCK);
     if (lock == 0) {
         mp_raise_OSError(MP_ENOENT);

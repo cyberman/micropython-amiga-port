@@ -40,6 +40,9 @@ static inline void mp_hal_set_interrupt_char(char c) { (void)c; }
 // Timezone offset (local = utc + offset) via locale.library
 int32_t mp_hal_timezone_offset_s(void);
 
+// UTF-8 → Latin-1 path conversion for AmigaOS
+const char *amiga_utf8_to_latin1(const char *s, char *buf, size_t bufsize);
+
 // Console raw/cooked mode switching for readline
 void mp_hal_stdio_mode_raw(void);
 void mp_hal_stdio_mode_orig(void);
