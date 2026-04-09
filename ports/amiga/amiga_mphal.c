@@ -170,7 +170,7 @@ void mp_hal_delay_ms(mp_uint_t ms) {
         ULONG sig = SetSignal(0, SIGBREAKF_CTRL_C);
         if (sig & SIGBREAKF_CTRL_C) {
             mp_sched_keyboard_interrupt();
-            mp_handle_pending(true);
+            mp_handle_pending(MP_HANDLE_PENDING_CALLBACKS_AND_EXCEPTIONS);
             return;
         }
     }
