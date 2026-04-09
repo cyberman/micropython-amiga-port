@@ -93,6 +93,7 @@ True
 - `hashlib` only supports SHA256 (MD5/SHA1 require TLS library)
 - Sockets are always blocking (no non-blocking mode)
 - No multithreading
+- re module: {n} quantifiers are not supported (use explicit repeated characters instead, e.g. "..." instead of ".{3}")
 
 ## License
 
