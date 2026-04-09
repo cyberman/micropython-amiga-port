@@ -86,3 +86,37 @@ python3 ports/amiga/patches/patch_iter_buf_heap.py
 
 After any `git rebase`, `git merge`, or `git pull` that updates upstream
 MicroPython. The script is idempotent — safe to run multiple times.
+
+## patch_vfs_posix_latin1.py
+
+Python script that adds `MICROPY_VFS_POSIX_CONVERT_PATH` hooks in the VFS
+POSIX layer for Latin-1 filename conversion on AmigaOS.
+
+### Why this patch is needed
+
+AmigaOS uses Latin-1 (ISO-8859-1) for filenames, but MicroPython stores
+strings internally as UTF-8. Without conversion, `open()` and `import` fail
+on filenames containing non-ASCII characters (é, ñ, ü, etc.) because
+the VFS POSIX layer passes raw UTF-8 bytes to libnix which passes them to
+AmigaOS, which doesn't understand multi-byte UTF-8 sequences.
+
+### Files patched
+
+- `extmod/vfs_posix_file.c` — hook before `open()` call in `mp_vfs_posix_file_open()`
+- `extmod/vfs_posix.c` — hook in `vfs_posix_get_path_str()` (stat, rename, mkdir, etc.)
+  and `mp_vfs_posix_import_stat()` (import resolution)
+
+The hooks are `#ifdef MICROPY_VFS_POSIX_CONVERT_PATH` guarded, so they have
+zero impact on ports that don't define the macro.
+
+### How to apply
+
+```sh
+cd ../..   # from ports/amiga/ to repo root
+python3 ports/amiga/patches/patch_vfs_posix_latin1.py
+```
+
+### When to reapply
+
+After any `git rebase`, `git merge`, or `git pull` that updates upstream
+MicroPython. The script is idempotent — safe to run multiple times.
