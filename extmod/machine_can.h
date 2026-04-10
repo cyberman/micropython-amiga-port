@@ -3,7 +3,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2019 Damien P. George
+ * Copyright (c) 2024-2026 Angus Gratton
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,29 +23,19 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#ifndef MICROPY_INCLUDED_PY_OBJMODULE_H
-#define MICROPY_INCLUDED_PY_OBJMODULE_H
+#ifndef MICROPY_INCLUDED_EXTMOD_MACHINE_CAN_H
+#define MICROPY_INCLUDED_EXTMOD_MACHINE_CAN_H
 
 #include "py/obj.h"
 
-#ifndef NO_QSTR
-// Only include module definitions when not doing qstr extraction, because the
-// qstr extraction stage also generates this module definition header file.
-#include "genhdr/moduledefs.h"
-#endif
+// machine.CAN support APIs that are called from port-level C code
 
-extern const mp_map_t mp_builtin_module_map;
+// Return the 0-based index of the CAN peripheral based on the name or the
+// (1-based) number.
+//
+// Raises an exception if the identifier is invalid, doesn't exist, or is reserved.
+mp_uint_t machine_can_get_index(mp_obj_t identifier);
 
-#if MICROPY_HAVE_REGISTERED_EXTENSIBLE_MODULES
-extern const mp_map_t mp_builtin_extensible_module_map;
-#endif
+void machine_can_deinit_all(void);
 
-mp_obj_t mp_module_get_builtin(qstr module_name, bool extensible);
-
-void mp_module_generic_attr(qstr attr, mp_obj_t *dest, const uint16_t *keys, mp_obj_t *values);
-
-static inline mp_obj_dict_t *mp_obj_module_get_globals(mp_obj_t module) {
-    return ((mp_obj_module_t *)MP_OBJ_TO_PTR(module))->globals;
-}
-
-#endif // MICROPY_INCLUDED_PY_OBJMODULE_H
+#endif // MICROPY_INCLUDED_EXTMOD_MACHINE_CAN_H

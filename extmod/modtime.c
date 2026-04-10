@@ -60,10 +60,6 @@ static mp_obj_t time_localtime(size_t n_args, const mp_obj_t *args) {
     } else {
         // Convert given seconds to tuple.
         mp_timestamp_t seconds = timeutils_obj_get_timestamp(args[0]);
-        #if defined(MICROPY_HAL_HAS_TIMEZONE) && MICROPY_HAL_HAS_TIMEZONE
-        extern int32_t mp_hal_timezone_offset_s(void);
-        seconds += mp_hal_timezone_offset_s();
-        #endif
         timeutils_seconds_since_epoch_to_struct_time(seconds, &tm);
     }
     mp_obj_t tuple[8] = {
@@ -79,33 +75,6 @@ static mp_obj_t time_localtime(size_t n_args, const mp_obj_t *args) {
     return mp_obj_new_tuple(8, tuple);
 }
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_time_localtime_obj, 0, 1, time_localtime);
-
-#if defined(MICROPY_HAL_HAS_TIMEZONE) && MICROPY_HAL_HAS_TIMEZONE
-// gmtime([secs]) — same as localtime but always UTC (no timezone offset).
-static mp_obj_t time_gmtime(size_t n_args, const mp_obj_t *args) {
-    timeutils_struct_time_t tm;
-    if (n_args == 0 || args[0] == mp_const_none) {
-        // Get current UTC time via seconds since epoch.
-        mp_timestamp_t seconds = timeutils_obj_get_timestamp(mp_time_time_get());
-        timeutils_seconds_since_epoch_to_struct_time(seconds, &tm);
-    } else {
-        mp_timestamp_t seconds = timeutils_obj_get_timestamp(args[0]);
-        timeutils_seconds_since_epoch_to_struct_time(seconds, &tm);
-    }
-    mp_obj_t tuple[8] = {
-        mp_obj_new_int(tm.tm_year),
-        mp_obj_new_int(tm.tm_mon),
-        mp_obj_new_int(tm.tm_mday),
-        mp_obj_new_int(tm.tm_hour),
-        mp_obj_new_int(tm.tm_min),
-        mp_obj_new_int(tm.tm_sec),
-        mp_obj_new_int(tm.tm_wday),
-        mp_obj_new_int(tm.tm_yday),
-    };
-    return mp_obj_new_tuple(8, tuple);
-}
-MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_time_gmtime_obj, 0, 1, time_gmtime);
-#endif
 
 // mktime()
 // This is the inverse function of localtime. Its argument is a full 8-tuple
@@ -231,11 +200,7 @@ static const mp_rom_map_elem_t mp_module_time_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_time) },
 
     #if MICROPY_PY_TIME_GMTIME_LOCALTIME_MKTIME
-    #if defined(MICROPY_HAL_HAS_TIMEZONE) && MICROPY_HAL_HAS_TIMEZONE
-    { MP_ROM_QSTR(MP_QSTR_gmtime), MP_ROM_PTR(&mp_time_gmtime_obj) },
-    #else
     { MP_ROM_QSTR(MP_QSTR_gmtime), MP_ROM_PTR(&mp_time_localtime_obj) },
-    #endif
     { MP_ROM_QSTR(MP_QSTR_localtime), MP_ROM_PTR(&mp_time_localtime_obj) },
     { MP_ROM_QSTR(MP_QSTR_mktime), MP_ROM_PTR(&mp_time_mktime_obj) },
     #endif
