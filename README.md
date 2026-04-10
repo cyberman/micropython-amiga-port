@@ -1,6 +1,6 @@
 # MicroPython for AmigaOS (m68k)
 
-A port of [MicroPython](https://micropython.org/) v1.27 to AmigaOS, targeting
+A port of [MicroPython](https://micropython.org/) v1.28 to AmigaOS, targeting
 Motorola 68020+ processors. Runs on classic Amiga hardware (A1200, A3000, A4000)
 and emulators (WinUAE, FS-UAE).
 
