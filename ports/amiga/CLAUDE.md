@@ -23,7 +23,7 @@ The binary `build/micropython` is an AmigaOS hunk executable (magic `0x000003f3`
 directly runnable on Amiga 68020+ or in an emulator.
 
 Build number auto-increments on each compilation (stored in `.build_number`).
-Banner example: `MicroPython v1.27.0 on 2026-03-18 14:00 build 42; Amiga with M68020`
+Banner example: `MicroPython v1.28.0 on 2026-04-10 18:00 build 42; Amiga with M68020`
 
 Compiler flags:
 - `-noixemul`: uses libnix instead of ixemul.library (no POSIX emulation)
@@ -56,7 +56,7 @@ Compiler flags:
 | `modules/platform.py` | Frozen platform module: CPU/FPU/chipset/Kickstart detection via uos C helpers |
 | `modules/urequests.py` | Frozen HTTP/1.1 client (GET, POST, PUT, DELETE, HEAD, chunked TE) |
 | `modules/gzip.py` | Frozen gzip module: CPython-compatible compress()/decompress() |
-| `patches/` | Patches to upstream MicroPython files (alignment + iter_buf heap alloc) |
+| `patches/` | Patches to upstream MicroPython files (alignment, iter_buf heap alloc, VFS POSIX Latin-1) |
 | `run_tests.py` | Test runner: runs each test in a separate micropython process |
 
 ### Architecture Decisions
