@@ -301,6 +301,16 @@ AmiTCP) to be running.
 - `setsockopt(level, optname, value)`, `setblocking(flag)` (no-op)
 - `close()`, `fileno()`
 
+### Ctrl-C handling in blocking socket calls
+
+`socket_raise_io_error()` helper consumes SIGBREAKF_CTRL_C after any
+blocking bsdsocket call (accept, connect, send, recv, sendto, recvfrom).
+If the signal is set, it raises `KeyboardInterrupt` directly instead of
+`OSError`, preventing a double-exception cascade that corrupted the VM stack.
+
+Special case: `accept()` on WinUAE returns a "fake fd" (positive value with
+garbage address) on break instead of -1. The helper closes it before raising.
+
 ### Cleanup
 
 - Socket objects have a `__del__` finalizer that calls `close()` on the fd.
@@ -512,6 +522,12 @@ Console is restored to cooked mode in crash handlers (`nlr_jump_fail`,
   pointers (fixed via `_gc_lock_pad` in `py/mpstate.h`) and `stack_top` pointing
   to the wrong stack after `StackSwap()` (fixed by setting `stack_top` to the top
   of the swapped stack). Assertions are now fully enabled.
+- **VM assertion vm.c:1144 on Ctrl-C in socket calls** (FIXED): bsdsocket on
+  AmigaOS wakes blocking syscalls on SIGBREAKF_CTRL_C without consuming the
+  signal. This caused a double exception (OSError + KeyboardInterrupt) that
+  corrupted the VM stack during `CANCEL_ACTIVE_FINALLY`. Fixed via
+  `socket_raise_io_error()` in modsocket.c which consumes the signal and raises
+  `KeyboardInterrupt` directly.
 
 ## Known Limitations
 

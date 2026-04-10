@@ -17,12 +17,41 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#include <proto/exec.h>
+#include <dos/dos.h>
+
 typedef struct _mp_obj_socket_t {
     mp_obj_base_t base;
     int fd;
 } mp_obj_socket_t;
 
 static const mp_obj_type_t socket_type;
+
+//
+// Check and consume SIGBREAKF_CTRL_C after a bsdsocket blocking call.
+//
+// WinUAE (and presumably Roadshow/AmiTCP) wake up bsdsocket syscalls
+// when SIGBREAKF_CTRL_C is posted, but do NOT consume the signal.
+// If we just raise OSError here, the caller's Python code might catch
+// it (except OSError:) and then at the MP_BC_POP_EXCEPT_JUMP at the end
+// of the except block, our VM hook (mp_amiga_check_signals) would
+// consume SIGBREAKF_CTRL_C and queue a KeyboardInterrupt. The KbdInt
+// would then be raised by mp_handle_pending() at the worst possible
+// moment (mid-POP_EXCEPT_JUMP), crashing the VM with vm.c:1144
+// assertion.
+//
+// To avoid the cascade, we consume SIGBREAKF_CTRL_C here and raise
+// KeyboardInterrupt DIRECTLY instead of OSError when we detect it.
+// This way only one exception is in flight and there's no pending
+// signal for the VM hook to trip on.
+//
+static MP_NORETURN void socket_raise_io_error(int err) {
+    ULONG sig = SetSignal(0, SIGBREAKF_CTRL_C);
+    if (sig & SIGBREAKF_CTRL_C) {
+        mp_raise_type(&mp_type_KeyboardInterrupt);
+    }
+    mp_raise_OSError(err);
+}
 
 // socket.close()
 static mp_obj_t socket_close(mp_obj_t self_in) {
@@ -77,8 +106,17 @@ static mp_obj_t socket_accept(mp_obj_t self_in) {
     struct sockaddr_in addr;
     socklen_t addr_len = sizeof(addr);
     int new_fd = accept(self->fd, (struct sockaddr *)&addr, &addr_len);
+    // WinUAE bsdsocket may return a fake fd on Ctrl-C without setting
+    // errno. Check the signal independently of the return value.
+    ULONG sig = SetSignal(0, SIGBREAKF_CTRL_C);
+    if (sig & SIGBREAKF_CTRL_C) {
+        if (new_fd >= 0) {
+            close(new_fd);  // close the fake fd to avoid a leak
+        }
+        mp_raise_type(&mp_type_KeyboardInterrupt);
+    }
     if (new_fd < 0) {
-        mp_raise_OSError(errno);
+        socket_raise_io_error(errno);
     }
 
     mp_obj_socket_t *o = mp_obj_malloc(mp_obj_socket_t, &socket_type);
@@ -120,7 +158,7 @@ static mp_obj_t socket_connect(mp_obj_t self_in, mp_obj_t addr_in) {
     }
 
     if (connect(self->fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        mp_raise_OSError(errno);
+        socket_raise_io_error(errno);
     }
     return mp_const_none;
 }
@@ -133,7 +171,7 @@ static mp_obj_t socket_send(mp_obj_t self_in, mp_obj_t data_in) {
     mp_get_buffer_raise(data_in, &bufinfo, MP_BUFFER_READ);
     int n = send(self->fd, bufinfo.buf, bufinfo.len, 0);
     if (n < 0) {
-        mp_raise_OSError(errno);
+        socket_raise_io_error(errno);
     }
     return MP_OBJ_NEW_SMALL_INT(n);
 }
@@ -148,7 +186,7 @@ static mp_obj_t socket_recv(mp_obj_t self_in, mp_obj_t len_in) {
     int n = recv(self->fd, vstr.buf, len, 0);
     if (n < 0) {
         vstr_clear(&vstr);
-        mp_raise_OSError(errno);
+        socket_raise_io_error(errno);
     }
     vstr.len = n;
     return mp_obj_new_bytes_from_vstr(&vstr);
@@ -182,7 +220,7 @@ static mp_obj_t socket_sendto(mp_obj_t self_in, mp_obj_t data_in, mp_obj_t addr_
     int n = sendto(self->fd, bufinfo.buf, bufinfo.len, 0,
                    (struct sockaddr *)&addr, sizeof(addr));
     if (n < 0) {
-        mp_raise_OSError(errno);
+        socket_raise_io_error(errno);
     }
     return MP_OBJ_NEW_SMALL_INT(n);
 }
@@ -200,7 +238,7 @@ static mp_obj_t socket_recvfrom(mp_obj_t self_in, mp_obj_t len_in) {
                      (struct sockaddr *)&addr, &addr_len);
     if (n < 0) {
         vstr_clear(&vstr);
-        mp_raise_OSError(errno);
+        socket_raise_io_error(errno);
     }
     vstr.len = n;
 
