@@ -46,7 +46,7 @@ Compiler flags:
 | `modsocket.c` | BSD socket module (socket, connect, bind, send, recv, getaddrinfo) via libsocket/bsdsocket.library |
 | `modssl.c` | SSL/TLS module via AmiSSL (wrap_socket, custom BIO with saveds callbacks) |
 | `modarexx.c` | ARexx IPC module (send, exists, ports) via rexxsyslib.library |
-| `modintuition.c` | `amiga.intuition` sub-package: `easy_request()` wrapper around EasyRequestArgs() |
+| `modintuition.c` | `amiga.intuition` sub-package: `easy_request()` / `auto_request()` / `message()` wrappers around EasyRequestArgs() |
 | `modzlib.c` | Native _zlib module with CRC32 for the frozen zlib module |
 | `modtime.c` | Time implementation for AmigaOS (gmtime/localtime/time via libnix) |
 | `qstrdefsport.h` | Port-specific qstrings (empty) |
@@ -354,16 +354,20 @@ The library is opened lazily on first `arexx.send()` call.
 ## Module amiga.intuition (AmigaOS -- modintuition.c)
 
 Native C sub-package exposing `intuition.library` GUI primitives. Phase 1
-covers `easy_request()`; future phases will add Window/Screen/Menu classes.
+covers three modal requester helpers built on `EasyRequestArgs()`; future
+phases will add Window/Screen/Menu classes.
 
-### Function
+### Functions
+
+All functions are keyword-only and share a single core engine
+(`do_easy_request_impl()`) that performs argument validation, UTF-8 → Latin-1
+conversion, label concatenation, and `EasyRequestArgs()` dispatch. The three
+public entry points are thin wrappers that select the button list and the
+return normalization.
 
 - `amiga.intuition.easy_request(*, title, body, buttons) -> int`
-  Displays a modal Workbench requester (NULL parent Window) via
-  `EasyRequestArgs()`. All args are keyword-only. Returns the 0-based index
-  of the clicked button (left-to-right). While the requester is open the
-  user must click a gadget — Ctrl-C pressed in the launching shell is not
-  intercepted by intuition.library and does not abort the call.
+  Generic N-button modal (1..8 buttons). Returns the 0-based index of the
+  clicked button (left-to-right). `title` may be empty.
 
 ```python
 import amiga.intuition as intuition
@@ -372,6 +376,27 @@ idx = intuition.easy_request(
     body="Update package found.\nInstall it?",
     buttons=["Install", "Cancel"])   # 0 = Install, 1 = Cancel
 ```
+
+- `amiga.intuition.auto_request(*, body, yes="Yes", no="No") -> bool`
+  Two-button yes/no wrapper. Returns `True` if the left (yes) button is
+  clicked, `False` for the right (no) button. Title is empty.
+
+```python
+if intuition.auto_request(body="Delete file?"):
+    os.remove(path)
+```
+
+- `amiga.intuition.message(*, body, button="OK") -> None`
+  Single-button notice wrapper (acknowledgement dialog). Always returns
+  `None`. Title is empty.
+
+```python
+intuition.message(body="Installation complete.")
+```
+
+While any requester is open the user must click a gadget — Ctrl-C pressed in
+the launching shell is not intercepted by intuition.library and does not
+abort the call.
 
 ### Implementation notes
 
@@ -401,8 +426,11 @@ idx = intuition.easy_request(
   button and 1..N-1 for the others (left-to-right, excluding rightmost).
   We remap to 0-based left-to-right: `raw==0 -> N-1`, `raw>=1 -> raw-1`,
   with single-button case clamped to 0.
-- **Validation**: `title` non-empty str, `body` any str (empty allowed,
-  `\n` allowed), `buttons` list/tuple of 1..8 non-empty str with no `|`.
+- **Validation**: `title` any str (empty allowed — `easy_request` now accepts
+  `""`, the two wrappers always pass `""`), `body` any str (empty allowed,
+  `\n` allowed), each label a non-empty str with no `|`. `easy_request`
+  enforces 1..8 buttons; `auto_request` always builds a 2-element list;
+  `message` always builds a 1-element list.
 
 ### Sub-package mechanics
 
@@ -423,11 +451,18 @@ The module is exposed as `amiga.intuition`, not just `intuition`. Pattern:
 
 ### Test harness
 
-`samples/test_easyrequest.py` covers 7 cases: two buttons, four buttons
-(index order), multi-line body, printf-injection (body with `%s %d %n`),
-one button, Latin-1 accents in title/body/labels, and a Ctrl-C probe (kept
-for completeness — in practice Ctrl-C in the shell does not abort an open
-EasyRequest, so the try/except falls through to the normal click path).
+Three sample scripts in `samples/` exercise each entry point:
+
+- `test_easyrequest.py` — 7 cases for `easy_request()`: two buttons, four
+  buttons (index order), multi-line body, printf-injection (body with
+  `%s %d %n`), one button, Latin-1 accents in title/body/labels, Ctrl-C
+  probe (kept for completeness — Ctrl-C does not abort an open EasyRequest).
+- `test_auto_request.py` — 6 cases for `auto_request()`: default labels
+  click-yes and click-no, Spanish labels (`Sí` / `No`), multi-line body,
+  printf-injection guard, Ctrl-C probe.
+- `test_message.py` — 6 cases for `message()`: default `OK`, custom
+  `Continue` label, Spanish `Vale` with accented body, multi-line body,
+  long body (>200 chars), and an `assert r is None` return-value check.
 
 ## Module ssl (AmigaOS -- modssl.c)
 
@@ -546,7 +581,7 @@ Console is restored to cooked mode in crash handlers (`nlr_jump_fail`,
 - `socket`: TCP/UDP sockets, DNS resolution (native C module via libsocket/bsdsocket.library)
 - `ssl`: TLS via AmiSSL (native C module, custom BIO with saveds callbacks)
 - `arexx`: ARexx IPC (send commands to AmigaOS apps, list ports, check existence)
-- `amiga.intuition`: native sub-package, `easy_request()` (Workbench modal dialog)
+- `amiga.intuition`: native sub-package, `easy_request()` / `auto_request()` / `message()` (Workbench modal dialogs)
 
 ### Frozen (Python modules embedded in binary)
 
