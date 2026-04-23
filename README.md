@@ -41,6 +41,10 @@ The Amiga binary executable can be found in [micropython](ports/amiga/build/micr
 - **ARexx IPC**: `arexx.send()`, `arexx.exists()`, `arexx.ports()`, and
   `arexx.Port()` persistent client with context manager for inter-process
   communication with AmigaOS applications
+- **Intuition GUI**: `amiga.intuition.easy_request(title, body, buttons)`
+  displays a modal Workbench requester and returns the 0-based index of the
+  clicked button (Latin-1 aware, printf-injection safe, Ctrl-C raises
+  KeyboardInterrupt)
 - **Platform detection**: `platform.amiga_info()` shows CPU, FPU, chipset,
   Kickstart version, and available memory
 

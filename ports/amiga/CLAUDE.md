@@ -46,6 +46,7 @@ Compiler flags:
 | `modsocket.c` | BSD socket module (socket, connect, bind, send, recv, getaddrinfo) via libsocket/bsdsocket.library |
 | `modssl.c` | SSL/TLS module via AmiSSL (wrap_socket, custom BIO with saveds callbacks) |
 | `modarexx.c` | ARexx IPC module (send, exists, ports) via rexxsyslib.library |
+| `modintuition.c` | `amiga.intuition` sub-package: `easy_request()` wrapper around EasyRequestArgs() |
 | `modzlib.c` | Native _zlib module with CRC32 for the frozen zlib module |
 | `modtime.c` | Time implementation for AmigaOS (gmtime/localtime/time via libnix) |
 | `qstrdefsport.h` | Port-specific qstrings (empty) |
@@ -350,6 +351,77 @@ ARexx-capable AmigaOS application.
 `mod_arexx_deinit()` is called before exit to close rexxsyslib.library.
 The library is opened lazily on first `arexx.send()` call.
 
+## Module amiga.intuition (AmigaOS -- modintuition.c)
+
+Native C sub-package exposing `intuition.library` GUI primitives. Phase 1
+covers `easy_request()`; future phases will add Window/Screen/Menu classes.
+
+### Function
+
+- `amiga.intuition.easy_request(*, title, body, buttons) -> int`
+  Displays a modal Workbench requester (NULL parent Window) via
+  `EasyRequestArgs()`. All args are keyword-only. Returns the 0-based index
+  of the clicked button (left-to-right). Raises `KeyboardInterrupt` if
+  Ctrl-C is pressed while the requester is open.
+
+```python
+import amiga.intuition as intuition
+idx = intuition.easy_request(
+    title="amigagames+",
+    body="Update package found.\nInstall it?",
+    buttons=["Install", "Cancel"])   # 0 = Install, 1 = Cancel
+```
+
+### Implementation notes
+
+- **IntuitionBase**: auto-opened by libnix startup through `libstubs.a`'s
+  `intuition.o` stub (declares `"intuition.library"` in `___LIB_LIST__`).
+  Auto-closed by `___exitlibraries` (inscribed in `___EXIT_LIST__`, iterated
+  by `callfuncs` in `ncrt0.o` after `main()` returns). No manual
+  `OpenLibrary`/`CloseLibrary` in the module — verified empirically by
+  locating the `___exitlibraries` bytecode signature in `build/micropython`
+  and the resolved `___LIB_LIST__` entry pointing to `"intuition.library"`.
+- **printf-injection safe**: `es_TextFormat = "%s"` is fixed and the body
+  is passed as the sole vararg via `EasyRequestArgs(..., args)`. A user body
+  containing `%s`, `%d`, `%n` is rendered literally, never interpreted.
+- **Latin-1 conversion**: title, body, and every label go through
+  `amiga_utf8_to_latin1()` into fresh `m_new` buffers. A single concatenated
+  gadgets buffer is built with `|` as separator (labels containing `|` are
+  rejected at validation — EasyRequest has no escape mechanism).
+- **Ctrl-C**: `EasyRequestArgs` returns -1 on signal break. Same cascade
+  risk as `modsocket.c`: `SetSignal(0, SIGBREAKF_CTRL_C)` to consume the
+  signal, then `mp_raise_type(&mp_type_KeyboardInterrupt)`. Buffers are
+  freed **before** raising so GC memory is not orphaned.
+- **Return normalization**: `EasyRequestArgs` returns 0 for the rightmost
+  button and 1..N-1 for the others (left-to-right, excluding rightmost).
+  We remap to 0-based left-to-right: `raw==0 -> N-1`, `raw>=1 -> raw-1`,
+  with single-button case clamped to 0.
+- **Validation**: `title` non-empty str, `body` any str (empty allowed,
+  `\n` allowed), `buttons` list/tuple of 1..8 non-empty str with no `|`.
+
+### Sub-package mechanics
+
+The module is exposed as `amiga.intuition`, not just `intuition`. Pattern:
+- `MP_REGISTER_MODULE(MP_QSTR_amiga, mp_module_amiga)` registers only the
+  parent package.
+- `mp_module_amiga`'s globals dict contains
+  `{MP_QSTR_intuition: &mp_module_amiga_intuition}`. Import resolution via
+  `MICROPY_MODULE_BUILTIN_SUBPACKAGES` (enabled by ROM level EVERYTHING)
+  finds the sub-module there.
+- The sub-module's `__name__` must be the literal qstr `"amiga.intuition"`.
+  The qstr scanner sees `MP_QSTR_amiga_dot_intuition` and emits
+  `Q(amiga_dot_intuition)` — which would become the wrong string
+  `"amiga_dot_intuition"`. To force the dotted qstr, **`qstrdefsport.h`
+  contains an explicit `Q(amiga.intuition)`** which is processed first
+  (cat order in py.mk: `$(PY_QSTR_DEFS) $(QSTR_DEFS) $(QSTR_DEFS_COLLECTED)`)
+  and wins the deduplication in `makeqstrdata.py`.
+
+### Test harness
+
+`samples/test_easyrequest.py` covers 7 cases: two buttons, four buttons
+(index order), multi-line body, printf-injection (body with `%s %d %n`),
+one button, Latin-1 accents in title/body/labels, Ctrl-C handling.
+
 ## Module ssl (AmigaOS -- modssl.c)
 
 Native C module providing TLS via AmiSSL (AmigaOS OpenSSL wrapper). Requires
@@ -467,6 +539,7 @@ Console is restored to cooked mode in crash handlers (`nlr_jump_fail`,
 - `socket`: TCP/UDP sockets, DNS resolution (native C module via libsocket/bsdsocket.library)
 - `ssl`: TLS via AmiSSL (native C module, custom BIO with saveds callbacks)
 - `arexx`: ARexx IPC (send commands to AmigaOS apps, list ports, check existence)
+- `amiga.intuition`: native sub-package, `easy_request()` (Workbench modal dialog)
 
 ### Frozen (Python modules embedded in binary)
 

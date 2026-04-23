@@ -33,6 +33,7 @@ SRC_C = \
 	modsocket.c \
 	modssl.c \
 	modarexx.c \
+	modintuition.c \
 	modzlib.c \
 	shared/readline/readline.c \
 	shared/runtime/pyexec.c \
@@ -40,7 +41,7 @@ SRC_C = \
 	shared/runtime/stdout_helpers.c \
 	shared/timeutils/timeutils.c \
 
-SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c main.c modamigaos.c modsocket.c modssl.c modarexx.c modzlib.c
+SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c main.c modamigaos.c modsocket.c modssl.c modarexx.c modintuition.c modzlib.c
 
 # Exclude shared/libc sources — libnix already provides libc
 SRC_EXTMOD_C := $(filter-out shared/libc/%.c,$(SRC_EXTMOD_C))
