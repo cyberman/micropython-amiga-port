@@ -361,8 +361,9 @@ covers `easy_request()`; future phases will add Window/Screen/Menu classes.
 - `amiga.intuition.easy_request(*, title, body, buttons) -> int`
   Displays a modal Workbench requester (NULL parent Window) via
   `EasyRequestArgs()`. All args are keyword-only. Returns the 0-based index
-  of the clicked button (left-to-right). Raises `KeyboardInterrupt` if
-  Ctrl-C is pressed while the requester is open.
+  of the clicked button (left-to-right). While the requester is open the
+  user must click a gadget — Ctrl-C pressed in the launching shell is not
+  intercepted by intuition.library and does not abort the call.
 
 ```python
 import amiga.intuition as intuition
@@ -388,10 +389,14 @@ idx = intuition.easy_request(
   `amiga_utf8_to_latin1()` into fresh `m_new` buffers. A single concatenated
   gadgets buffer is built with `|` as separator (labels containing `|` are
   rejected at validation — EasyRequest has no escape mechanism).
-- **Ctrl-C**: `EasyRequestArgs` returns -1 on signal break. Same cascade
-  risk as `modsocket.c`: `SetSignal(0, SIGBREAKF_CTRL_C)` to consume the
-  signal, then `mp_raise_type(&mp_type_KeyboardInterrupt)`. Buffers are
-  freed **before** raising so GC memory is not orphaned.
+- **Ctrl-C (defensive, not exercised)**: in practice intuition.library does
+  not break out of an open EasyRequest on SIGBREAKF_CTRL_C, so the call
+  always blocks until a gadget is clicked. The code still handles the
+  documented `-1` return (`SetSignal(0, SIGBREAKF_CTRL_C)` + direct
+  `mp_raise_type(&mp_type_KeyboardInterrupt)`, cascade-safe à la
+  `modsocket.c`) as a guard if a future Intuition release changes that
+  behaviour. Buffers are freed **before** raising so GC memory is not
+  orphaned.
 - **Return normalization**: `EasyRequestArgs` returns 0 for the rightmost
   button and 1..N-1 for the others (left-to-right, excluding rightmost).
   We remap to 0-based left-to-right: `raw==0 -> N-1`, `raw>=1 -> raw-1`,
@@ -420,7 +425,9 @@ The module is exposed as `amiga.intuition`, not just `intuition`. Pattern:
 
 `samples/test_easyrequest.py` covers 7 cases: two buttons, four buttons
 (index order), multi-line body, printf-injection (body with `%s %d %n`),
-one button, Latin-1 accents in title/body/labels, Ctrl-C handling.
+one button, Latin-1 accents in title/body/labels, and a Ctrl-C probe (kept
+for completeness — in practice Ctrl-C in the shell does not abort an open
+EasyRequest, so the try/except falls through to the normal click path).
 
 ## Module ssl (AmigaOS -- modssl.c)
 

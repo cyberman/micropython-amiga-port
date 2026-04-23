@@ -122,3 +122,43 @@ API protocol, multi-turn conversation state management, parsing fenced code
 blocks, environment variable access via `os.getenv()`. A modest heap bump
 (`-m 512`) is recommended because the conversation history grows with each
 turn and the JSON payload is sent in full on every request.
+
+### aminet_tools.py — Interactive Aminet browser
+
+An Aminet client that runs straight from the AmigaOS shell. Three modes:
+list today's recent uploads, browse the full 14-day recent history grouped
+by date, or search the whole archive. Results are rendered as a formatted
+table (name, version, path, downloads, size, date, description) with
+hanging-indent wrapping tuned to the terminal width. Search mode is
+interactive with pagination and direct download from the result list.
+
+```
+micropython samples/aminet_tools.py              ; today's recent uploads
+micropython samples/aminet_tools.py -2           ; uploads from 2 days ago
+micropython samples/aminet_tools.py -all         ; all 14 days, grouped
+micropython samples/aminet_tools.py "mui"        ; search for "mui"
+micropython samples/aminet_tools.py -- "-lha"    ; query starts with "-"
+```
+
+Options: `-N` (0..14) shows uploads from N days ago; `-all` dumps every day
+Aminet keeps; `-w N` sets the display width (default 77, min 40); `-l N`
+sets the screen height in lines for search pagination (default 23, min 5);
+`--` ends option parsing so a query can start with `-`; `-h` shows help.
+
+Interactive search flow: each screen fits within the `-l` budget; prompts
+offer `n`/Enter (next), `p` (prev), `q` (quit), `<number>` to download the
+matching package, `?` for help. Next/prev stays inside the current Aminet
+page when more results fit, otherwise fetches the next/previous Aminet
+page. Downloads reuse the same cached result page so the listing stays put
+when you return to the prompt. Ctrl-C at any input exits cleanly.
+
+Requires `http_util.py` in the same directory (shared with `wget.py`;
+provides HTTP GET with redirect handling, streamed download-to-file with
+progress bar, and `wrap_text()` used by the table renderer).
+
+Demonstrates: `socket` HTTP/1.1 client over `http_util`, lightweight HTML
+parsing without `re` (tag stripping, entity decoding, `<tr>`/`<td>`
+extraction), multi-column text layout with priority-based shrinking,
+paginated interactive UI built on `input()`. Runs fine with the default
+128 KB heap; bump to `-m 256` only if a very large search result page hits
+GC pressure.
