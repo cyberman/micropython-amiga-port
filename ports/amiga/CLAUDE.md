@@ -46,7 +46,8 @@ Compiler flags:
 | `modsocket.c` | BSD socket module (socket, connect, bind, send, recv, getaddrinfo) via libsocket/bsdsocket.library |
 | `modssl.c` | SSL/TLS module via AmiSSL (wrap_socket, custom BIO with saveds callbacks) |
 | `modarexx.c` | ARexx IPC module (send, exists, ports) via rexxsyslib.library |
-| `modintuition.c` | `amiga.intuition` sub-package: `easy_request()` / `auto_request()` / `message()` wrappers around EasyRequestArgs() |
+| `modintuition.c` | `amiga.intuition` sub-package: `easy_request()` / `auto_request()` / `message()` wrappers around EasyRequestArgs(); also hosts the parent `amiga` package registration |
+| `modasl.c` | `amiga.asl` sub-package: `file_request()` wrapper around asl.library's FileRequester (open/save/multi-select/drawers-only) |
 | `modzlib.c` | Native _zlib module with CRC32 for the frozen zlib module |
 | `modtime.c` | Time implementation for AmigaOS (gmtime/localtime/time via libnix) |
 | `qstrdefsport.h` | Port-specific qstrings (empty) |
@@ -464,6 +465,109 @@ Three sample scripts in `samples/` exercise each entry point:
   `Continue` label, Spanish `Vale` with accented body, multi-line body,
   long body (>200 chars), and an `assert r is None` return-value check.
 
+## Module amiga.asl (AmigaOS -- modasl.c)
+
+Native C sub-package exposing `asl.library`'s requester primitives. Phase 1
+covers the File requester; Font and ScreenMode requesters can be added
+later using the same scaffolding (AllocAslRequest + AslRequest + tag list).
+
+### Function
+
+- `amiga.asl.file_request(*, title=None, initial_drawer=None,
+  initial_file=None, initial_pattern=None, save_mode=False,
+  multi_select=False, drawers_only=False, reject_icons=False)`
+  All arguments are keyword-only and optional. Returns:
+  - a `str` (joined drawer+file via `AddPart()`) in simple mode,
+  - a `str` drawer path when `drawers_only=True`,
+  - a `list[str]` of length N≥0 when `multi_select=True`,
+  - `None` if the user cancels (in every mode).
+
+```python
+import amiga.asl as asl
+
+path = asl.file_request(title="Open file", initial_drawer="PROGDIR:")
+save = asl.file_request(title="Save as",
+                        initial_file="untitled.txt",
+                        save_mode=True)
+paths = asl.file_request(multi_select=True)            # list[str] | None
+dir_  = asl.file_request(drawers_only=True)            # str       | None
+```
+
+### Implementation notes
+
+- **AslBase**: auto-opened by libnix startup through `libstubs.a`'s
+  `asl.o` stub (declares `"asl.library"` in `___LIB_LIST__`). Auto-closed
+  by `___exitlibraries` at process exit. No manual
+  `OpenLibrary`/`CloseLibrary` in the module — doing so would cause a
+  double-close at exit (same failure class as the AmiSSL `-lamisslauto`
+  crash that produced error `#80000004`). Verified empirically:
+  `asl.library` appears in `___LIB_LIST__` at `.data+0x298` with name
+  pointer into the `.text` library-names block, alongside
+  `intuition.library`, `dos.library`, etc. The ONLY include needed is
+  `<proto/asl.h>`.
+- **Ownership**: the module owns the `FileRequester` returned by
+  `AllocAslRequest()` and always pairs it with `FreeAslRequest()` on
+  every exit path (cancel, single-result, multi-select, exception via
+  `mp_raise_*` — the allocation happens after all validation, so a raise
+  before the alloc cannot leak).
+- **CRITICAL — decode before free**: `rf_Dir`, `rf_File`, and every
+  `wa_Name` in `rf_ArgList` point into the requester's own storage.
+  `FreeAslRequest()` invalidates all of them. All Python string objects
+  are therefore built BEFORE calling Free.
+- **Latin-1 conversion**: every inbound string (`title`, `initial_drawer`,
+  `initial_file`, `initial_pattern`) is converted UTF-8 → Latin-1 into a
+  stack-allocated 512-byte buffer via `amiga_utf8_to_latin1()`. Every
+  outbound string (`rf_Dir`, `rf_File`, `wa_Name`) is converted back
+  Latin-1 → UTF-8 before returning to Python. The Latin-1 helper is
+  duplicated as a small static function in modasl.c to keep the module
+  self-contained (same 25-line helper as modamigaos.c).
+- **Tag list**: stack-allocated `struct TagItem tags[12]` (9 optional
+  tags + TAG_END + headroom). Tags are appended only when the caller
+  passed a non-None, non-empty value for string kwargs, or a `True` for
+  boolean kwargs. Empty strings are skipped so we don't clear a default
+  inside asl.library. When `initial_pattern` is non-empty, the module
+  also appends `ASLFR_DoPatterns=TRUE` so the pattern gadget becomes
+  visible (otherwise the pattern filter is set but invisible).
+- **Path joining**: done in C via dos.library `AddPart()` into a 512-byte
+  stack buffer. For `drawers_only` mode, `AddPart()` is called with an
+  empty filename and returns the drawer untouched (AmigaOS convention
+  "this is the directory itself"). On truncation (should not happen with
+  a 512-byte buffer at AmigaOS's ~255-char path limit) the module raises
+  `OSError("joined path too long")` — there is no `MP_ENAMETOOLONG`
+  constant in `py/mperrno.h`.
+- **Validation**: mutually-exclusive flag combinations (`save_mode &&
+  multi_select`, `save_mode && drawers_only`) are rejected with
+  `ValueError` before any Amiga call. `AllocAslRequest() == NULL` raises
+  `MemoryError` directly.
+- **No Ctrl-C handling**: asl.library does not surface
+  `SIGBREAKF_CTRL_C` while a requester has focus — same caveat as
+  `amiga.intuition`. `AslRequest()` returns `TRUE` on OK, `FALSE` on
+  Cancel only; a break is only seen after dismissal.
+
+### Sub-package mechanics
+
+Same scheme as `amiga.intuition`:
+- The parent `amiga` package lives in `modintuition.c` (its globals
+  dict is where all sub-modules attach). `modasl.c` declares
+  `mp_module_amiga_asl` as non-static; `modintuition.c` has
+  `extern const mp_obj_module_t mp_module_amiga_asl;` and adds it to
+  `mp_module_amiga_globals_table` as `{MP_QSTR_asl, ...}`.
+- `MICROPY_MODULE_BUILTIN_SUBPACKAGES` (enabled by ROM level
+  EVERYTHING) resolves `import amiga.asl` by looking up `asl` in the
+  parent's globals.
+- The dotted `__name__` qstr is forced via an explicit `Q(amiga.asl)`
+  line in `qstrdefsport.h` (same reason as `Q(amiga.intuition)`: the
+  qstr scanner would otherwise emit the wrong string
+  `"amiga_dot_asl"`).
+
+### Test harness
+
+`samples/test_asl.py` is a menu-driven harness covering seven scenarios:
+simple open, pattern filter (`#?.py` in `PROGDIR:samples`), save mode,
+multi-select, drawers-only, an explicit cancel probe with
+`assert result is None`, and a Latin-1 accented title (`Café Français`)
+that verifies UTF-8 → Latin-1 makes it to the ASL gadget labels.
+
 ## Module ssl (AmigaOS -- modssl.c)
 
 Native C module providing TLS via AmiSSL (AmigaOS OpenSSL wrapper). Requires
@@ -582,6 +686,7 @@ Console is restored to cooked mode in crash handlers (`nlr_jump_fail`,
 - `ssl`: TLS via AmiSSL (native C module, custom BIO with saveds callbacks)
 - `arexx`: ARexx IPC (send commands to AmigaOS apps, list ports, check existence)
 - `amiga.intuition`: native sub-package, `easy_request()` / `auto_request()` / `message()` (Workbench modal dialogs)
+- `amiga.asl`: native sub-package, `file_request()` (open/save/multi-select/drawers-only requester via asl.library)
 
 ### Frozen (Python modules embedded in binary)
 

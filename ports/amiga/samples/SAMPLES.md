@@ -162,3 +162,26 @@ extraction), multi-column text layout with priority-based shrinking,
 paginated interactive UI built on `input()`. Runs fine with the default
 128 KB heap; bump to `-m 256` only if a very large search result page hits
 GC pressure.
+
+### test_asl.py — Exercise the ASL file requester
+
+Menu-driven test harness for `amiga.asl.file_request()` covering the seven
+modes of the wrapper: simple open, pattern filter (`#?.py`), save mode,
+multi-select, drawers-only directory picker, an explicit Cancel probe that
+asserts `None` is returned, and a Latin-1 accented title to verify the
+UTF-8 → Latin-1 conversion all the way to the ASL gadget labels.
+
+```
+micropython samples/test_asl.py
+```
+
+Pick a scenario at the menu prompt; the requester pops as a real ASL
+window. Returned values are printed in `repr()` form, lists are unpacked
+one path per line. `q` at the menu exits. Ctrl-C at the prompt exits
+cleanly; Ctrl-C while a requester has focus is *not* propagated (asl.library
+does not surface `SIGBREAKF_CTRL_C` until the requester is dismissed,
+same caveat as `amiga.intuition`).
+
+Demonstrates: the `amiga.asl` module, every supported keyword argument,
+cancel handling, list-valued multi-select results, path joining via
+`AddPart()` on the C side.

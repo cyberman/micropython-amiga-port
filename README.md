@@ -46,6 +46,11 @@ The Amiga binary executable can be found in [micropython](ports/amiga/build/micr
   plus two convenience wrappers `auto_request(body, yes="Yes", no="No") -> bool`
   (two-button yes/no dialog) and `message(body, button="OK") -> None`
   (single-button notice). Latin-1 aware and printf-injection safe
+- **ASL file requester**: `amiga.asl.file_request(**kwargs)` wraps
+  `asl.library`'s native file chooser — supports initial drawer/file/pattern,
+  save mode, multi-select (returns `list[str]`), and directories-only mode
+  (returns the drawer path). Latin-1 aware, paths joined via dos.library
+  `AddPart()`
 - **Platform detection**: `platform.amiga_info()` shows CPU, FPU, chipset,
   Kickstart version, and available memory
 

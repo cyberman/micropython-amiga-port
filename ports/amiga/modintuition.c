@@ -339,10 +339,15 @@ static const mp_obj_module_t mp_module_amiga_intuition = {
 // --- amiga top-level package ------------------------------------------- //
 // Sub-packages are exposed by placing them in the parent's globals dict
 // (MICROPY_MODULE_BUILTIN_SUBPACKAGES, enabled by EVERYTHING level).
+// Each sub-package is defined in its own translation unit and wired in
+// here via an extern declaration.
+
+extern const mp_obj_module_t mp_module_amiga_asl;
 
 static const mp_rom_map_elem_t mp_module_amiga_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),  MP_ROM_QSTR(MP_QSTR_amiga) },
     { MP_ROM_QSTR(MP_QSTR_intuition), MP_ROM_PTR(&mp_module_amiga_intuition) },
+    { MP_ROM_QSTR(MP_QSTR_asl),       MP_ROM_PTR(&mp_module_amiga_asl) },
 };
 static MP_DEFINE_CONST_DICT(mp_module_amiga_globals,
                             mp_module_amiga_globals_table);
